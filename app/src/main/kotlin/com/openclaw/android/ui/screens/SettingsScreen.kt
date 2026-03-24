@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.openclaw.android.BuildConfig
 import com.openclaw.android.ai.AgentConfig
 import com.openclaw.android.ai.ModelRegistry
 import com.openclaw.android.util.ServiceState
@@ -172,11 +173,34 @@ fun SettingsScreen(onStartService: () -> Unit = {}, onStopService: () -> Unit = 
         item {
             Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(10.dp)) {
                 Column(Modifier.padding(16.dp)) {
-                    AR("Version", "1.2.2-alpha"); AR("Tools", "31"); AR("Device", android.os.Build.MODEL); AR("Android", "API ${android.os.Build.VERSION.SDK_INT}")
+                    AR("Version", BuildConfig.VERSION_NAME); AR("Tools", "31"); AR("Device", android.os.Build.MODEL); AR("Android", "API ${android.os.Build.VERSION.SDK_INT}")
                     Spacer(Modifier.height(8.dp))
-                    Button(onClick = { scope.launch { kotlinx.coroutines.delay(1000); context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/wayansuardyana-code/android-openclaw-native/releases")).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }) } },
+
+                    var updateStatus by remember { mutableStateOf("") }
+                    var checking by remember { mutableStateOf(false) }
+
+                    Button(onClick = {
+                        checking = true; updateStatus = "Checking..."
+                        scope.launch {
+                            val update = com.openclaw.android.util.AppUpdater.checkForUpdate()
+                            if (update == null) {
+                                updateStatus = "Failed to check"; checking = false
+                            } else if (!update.isNewer) {
+                                updateStatus = "Up to date (${update.version})"; checking = false
+                            } else {
+                                updateStatus = "Downloading ${update.version}..."
+                                com.openclaw.android.util.AppUpdater.downloadAndInstall(context, update.downloadUrl, update.version)
+                                checking = false
+                            }
+                        }
+                    }, enabled = !checking,
                         colors = ButtonDefaults.buttonColors(containerColor = CYAN), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Default.SystemUpdate, null, Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text("Check Updates", fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                        Icon(Icons.Default.SystemUpdate, null, Modifier.size(16.dp)); Spacer(Modifier.width(4.dp))
+                        Text(if (checking) "Checking..." else "Check Updates", fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                    }
+                    if (updateStatus.isNotBlank()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(updateStatus, color = if (updateStatus.contains("Up to date")) GREEN else CYAN, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
                     }
                 }
             }

@@ -260,29 +260,61 @@ object UtilityTools {
 
     private fun webSearch(query: String): String {
         val encoded = java.net.URLEncoder.encode(query, "UTF-8")
-        val conn = Jsoup.connect("https://html.duckduckgo.com/html/?q=$encoded")
-            .userAgent("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36")
-            .header("Accept", "text/html")
-            .timeout(15000)
-            .followRedirects(true)
-            .ignoreHttpErrors(true)
-        try { conn.sslSocketFactory(trustAllSsl()) } catch (_: Exception) {}
-        val doc = conn.get()
+        val gson = Gson()
 
-        val results = doc.select(".result__body").take(5).mapIndexed { i, el ->
-            val resultTitle = el.select(".result__title").text()
-            val snippet = el.select(".result__snippet").text()
-            val link = el.select(".result__url").text()
-            val gson = Gson()
-            """{"rank":${i + 1},"title":${gson.toJson(resultTitle)},"snippet":${gson.toJson(snippet)},"url":${gson.toJson(link)}}"""
+        // Try multiple search engines (DuckDuckGo blocks some Android requests)
+        val searchUrls = listOf(
+            "https://lite.duckduckgo.com/lite/?q=$encoded" to ".result-link" to ".result-snippet",
+            "https://html.duckduckgo.com/html/?q=$encoded" to ".result__title" to ".result__snippet",
+        )
+
+        for ((urlSelectors, _) in searchUrls) {
+            val (url, titleSel) = urlSelectors
+            try {
+                val conn = Jsoup.connect(url)
+                    .userAgent("Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
+                    .header("Accept", "text/html,application/xhtml+xml")
+                    .header("Accept-Language", "en-US,en;q=0.9,id;q=0.8")
+                    .timeout(10000)
+                    .followRedirects(true)
+                    .ignoreHttpErrors(true)
+                try { conn.sslSocketFactory(trustAllSsl()) } catch (_: Exception) {}
+                val doc = conn.get()
+
+                // Try DuckDuckGo lite format
+                val links = doc.select("a.result-link")
+                if (links.isNotEmpty()) {
+                    val results = links.take(5).mapIndexed { i, el ->
+                        val title = el.text()
+                        val href = el.attr("href")
+                        // Get snippet from next sibling
+                        val snippet = el.parent()?.nextElementSibling()?.text() ?: ""
+                        """{"rank":${i+1},"title":${gson.toJson(title)},"url":${gson.toJson(href)},"snippet":${gson.toJson(snippet.take(200))}}"""
+                    }
+                    return """{"query":${gson.toJson(query)},"results":[${results.joinToString(",")}]}"""
+                }
+
+                // Try DuckDuckGo HTML format
+                val bodies = doc.select(".result__body")
+                if (bodies.isNotEmpty()) {
+                    val results = bodies.take(5).mapIndexed { i, el ->
+                        val title = el.select(".result__title").text()
+                        val snippet = el.select(".result__snippet").text()
+                        val link = el.select(".result__url").text()
+                        """{"rank":${i+1},"title":${gson.toJson(title)},"snippet":${gson.toJson(snippet)},"url":${gson.toJson(link)}}"""
+                    }
+                    return """{"query":${gson.toJson(query)},"results":[${results.joinToString(",")}]}"""
+                }
+            } catch (_: Exception) { continue }
         }
 
-        if (results.isEmpty()) {
-            // Fallback: try lite.duckduckgo.com
-            return """{"query":${Gson().toJson(query)},"results":[],"note":"No results found. Try web_scrape on a specific URL instead."}"""
+        // Final fallback: use web_scrape on a search-friendly site
+        return try {
+            val wttrResult = webScrape("https://www.google.com/search?q=$encoded&hl=en", "h3")
+            """{"query":${gson.toJson(query)},"results":[],"fallback_scrape":${gson.toJson(wttrResult)},"note":"DuckDuckGo unavailable. Scraped Google instead."}"""
+        } catch (_: Exception) {
+            """{"query":${gson.toJson(query)},"results":[],"error":"All search engines failed. Try web_scrape on a specific URL."}"""
         }
-
-        return """{"query":${Gson().toJson(query)},"results":[${results.joinToString(",")}]}"""
     }
 
     /** Trust all SSL certs (needed on some Android devices with outdated root certs) */

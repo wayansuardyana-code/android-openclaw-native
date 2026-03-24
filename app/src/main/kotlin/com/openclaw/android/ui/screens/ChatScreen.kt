@@ -132,8 +132,9 @@ fun ChatScreen() {
     val messages = ChatState.messages
     var input by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
-    var attachedFile by remember { mutableStateOf<Pair<String, String>?>(null) } // (name, content)
-    val scope = rememberCoroutineScope()
+    var attachedFile by remember { mutableStateOf<Pair<String, String>?>(null) }
+    // Use GlobalScope so agent keeps running when user switches tabs
+    val scope = remember { kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main + kotlinx.coroutines.SupervisorJob()) }
     val listState = rememberLazyListState()
     val llmClient = remember { LlmClient() }
     val agentLoop = remember { AgentLoop(llmClient) }
@@ -164,13 +165,17 @@ fun ChatScreen() {
 
     // Voice input
     var isRecording by remember { mutableStateOf(false) }
-    val hasMicPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+    var hasMicPermission by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) }
+    val micPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        hasMicPermission = granted
+    }
     val speechRecognizer = remember {
-        if (SpeechRecognizer.isRecognitionAvailable(context)) SpeechRecognizer.createSpeechRecognizer(context) else null
+        try { if (SpeechRecognizer.isRecognitionAvailable(context)) SpeechRecognizer.createSpeechRecognizer(context) else null } catch (_: Exception) { null }
     }
 
     fun startListening() {
-        if (speechRecognizer == null || !hasMicPermission) return
+        if (!hasMicPermission) { micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO); return }
+        if (speechRecognizer == null) { android.widget.Toast.makeText(context, "Speech recognition not available on this device", android.widget.Toast.LENGTH_SHORT).show(); return }
         isRecording = true
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)

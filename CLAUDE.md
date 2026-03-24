@@ -88,7 +88,7 @@ POST /agent/chat                  # {message, provider, apiKey, model, baseUrl} 
 - POST /agent/chat endpoint accepts {message, provider, apiKey, model, baseUrl}
 - Max 10 tool-calling steps per agent run
 
-## LLM Tools (41 total)
+## LLM Tools (45 total)
 ### Android Device Tools (18)
 android_read_screen, find_element, read_region,
 android_tap, android_long_press, android_swipe, android_type_text,
@@ -113,6 +113,35 @@ ssh_execute, postgres_query (via SSH tunnel)
 ### Python Runtime (3)
 install_python, run_python, pip_install
 
+## App Interaction Guide (TOOLS.md)
+- TOOLS.md is a workspace file the agent reads at startup — contains per-app interaction patterns
+- Documents how to navigate specific apps: button labels, tap sequences, known quirks
+- Agent auto-updates TOOLS.md when it discovers a new interaction pattern during a task
+- Example entries: how to compose a WhatsApp message, how to find settings in Instagram, etc.
+- Agents should check TOOLS.md before attempting to control an unfamiliar app
+
+## Auto-Learn System (skills.md)
+- skills.md is auto-populated after the agent completes any task with 5+ steps
+- Agent summarizes the task as a reusable skill: goal, steps taken, tools used, outcome
+- On future tasks, agent reads skills.md first to check for applicable patterns
+- Skills accumulate over time — agent gets faster at repeated task types
+- Manual editing supported via Files tab
+
+## ACT → OBSERVE → REPORT → LEARN Pattern
+The agent follows a 4-phase automation loop for multi-step tasks:
+1. **ACT** — Execute the plan (tool calls, screen taps, data operations)
+2. **OBSERVE** — Read screen / check results / verify success
+3. **REPORT** — Summarize what happened (push notification or chat reply)
+4. **LEARN** — If task had 5+ steps, append skill summary to skills.md
+
+This pattern ensures tasks are verifiable, results are communicated, and knowledge accumulates.
+
+## MiniMax XML Cleanup (cleanLlmJson)
+- MiniMax models sometimes return XML-wrapped JSON or partial XML tags in tool call responses
+- cleanLlmJson() utility strips XML envelope tags before JSON parsing
+- Prevents tool-call parse failures when using MiniMax M2.7 or VL-01
+- Applied automatically in AgentLoop before processing LLM tool call responses
+
 ## File System
 - Agent config files: `filesDir/agent_config/` (identity.md, memory.md, system_prompt.md, skills.md)
 - Chat reads system_prompt.md + identity.md and injects into LLM system prompt
@@ -124,7 +153,12 @@ install_python, run_python, pip_install
 - Shizuku integration declared but not yet connected
 - nodejs-mobile integration optional — Kotlin-native AI agent works standalone
 - APK served via `python3 -m http.server 8899` on VPS for download
-- v0.6.0 is latest build
+- v1.9.1 is latest build
+- v1.9.1: 45 LLM tools (18 Android device + 17 utility + 7 service + 3 Python)
+- v1.9.1: Auto-learn (skills.md auto-populated after 5+ step tasks)
+- v1.9.1: ACT → OBSERVE → REPORT → LEARN automation pattern
+- v1.9.1: App interaction guide in TOOLS.md
+- v1.9.1: MiniMax XML cleanup (cleanLlmJson) for stable tool call parsing
 - v0.6.0: 13 LLM providers with dropdown, single API key field, editable model name
 - v0.6.0: Toggle start/stop button, check for updates, push notification toggle
 - v0.6.0: Logs copyable (SelectionContainer), Terminal tab with shell execution

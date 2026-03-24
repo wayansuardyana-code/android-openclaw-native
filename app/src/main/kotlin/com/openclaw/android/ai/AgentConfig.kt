@@ -6,7 +6,7 @@ import com.openclaw.android.OpenClawApplication
 
 /**
  * Persists AI agent configuration (API keys, active provider, model).
- * Uses SharedPreferences for simplicity — encrypted in production.
+ * Supports dynamic provider keys — one key per provider stored in SharedPreferences.
  */
 object AgentConfig {
     private const val PREFS = "openclaw_agent"
@@ -18,52 +18,99 @@ object AgentConfig {
         get() = prefs().getString("active_provider", "minimax") ?: "minimax"
         set(v) = prefs().edit().putString("active_provider", v).apply()
 
-    // API Keys
-    var anthropicKey: String
-        get() = prefs().getString("key_anthropic", "") ?: ""
-        set(v) = prefs().edit().putString("key_anthropic", v).apply()
+    var pushNotificationsEnabled: Boolean
+        get() = prefs().getBoolean("push_notifications", true)
+        set(v) = prefs().edit().putBoolean("push_notifications", v).apply()
 
-    var openaiKey: String
-        get() = prefs().getString("key_openai", "") ?: ""
-        set(v) = prefs().edit().putString("key_openai", v).apply()
+    // Dynamic key storage per provider
+    fun getKeyForProvider(provider: String): String =
+        prefs().getString("key_$provider", "") ?: ""
 
-    var minimaxKey: String
-        get() = prefs().getString("key_minimax", "") ?: ""
-        set(v) = prefs().edit().putString("key_minimax", v).apply()
+    fun setKeyForProvider(provider: String, key: String) =
+        prefs().edit().putString("key_$provider", key).apply()
 
-    var googleKey: String
-        get() = prefs().getString("key_google", "") ?: ""
-        set(v) = prefs().edit().putString("key_google", v).apply()
+    // Default models per provider
+    private val defaultModels = mapOf(
+        "anthropic" to "claude-sonnet-4-6",
+        "openai" to "gpt-4o",
+        "minimax" to "MiniMax-M1-80k",
+        "google" to "gemini-2.5-flash",
+        "openrouter" to "anthropic/claude-sonnet-4-6",
+        "deepseek" to "deepseek-chat",
+        "mistral" to "mistral-large-latest",
+        "groq" to "llama-3.3-70b-versatile",
+        "xai" to "grok-2",
+        "together" to "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        "fireworks" to "accounts/fireworks/models/llama-v3p3-70b-instruct",
+        "ollama" to "llama3.2",
+        "custom" to ""
+    )
 
-    var openrouterKey: String
-        get() = prefs().getString("key_openrouter", "") ?: ""
-        set(v) = prefs().edit().putString("key_openrouter", v).apply()
+    fun getModelForProvider(provider: String): String =
+        prefs().getString("model_$provider", defaultModels[provider] ?: "") ?: ""
 
-    var customKey: String
-        get() = prefs().getString("key_custom", "") ?: ""
-        set(v) = prefs().edit().putString("key_custom", v).apply()
+    fun setModelForProvider(provider: String, model: String) =
+        prefs().edit().putString("model_$provider", model).apply()
+
+    // Base URLs per provider
+    private val baseUrls = mapOf(
+        "anthropic" to "https://api.anthropic.com",
+        "openai" to "https://api.openai.com",
+        "minimax" to "https://api.minimax.io/anthropic",
+        "google" to "https://generativelanguage.googleapis.com",
+        "openrouter" to "https://openrouter.ai/api",
+        "deepseek" to "https://api.deepseek.com",
+        "mistral" to "https://api.mistral.ai",
+        "groq" to "https://api.groq.com/openai",
+        "xai" to "https://api.x.ai",
+        "together" to "https://api.together.xyz",
+        "fireworks" to "https://api.fireworks.ai/inference",
+        "ollama" to "http://localhost:11434",
+        "custom" to ""
+    )
 
     var customBaseUrl: String
         get() = prefs().getString("custom_base_url", "") ?: ""
         set(v) = prefs().edit().putString("custom_base_url", v).apply()
 
+    // Backward compat
+    var anthropicKey: String
+        get() = getKeyForProvider("anthropic")
+        set(v) = setKeyForProvider("anthropic", v)
+    var openaiKey: String
+        get() = getKeyForProvider("openai")
+        set(v) = setKeyForProvider("openai", v)
+    var minimaxKey: String
+        get() = getKeyForProvider("minimax")
+        set(v) = setKeyForProvider("minimax", v)
+    var openrouterKey: String
+        get() = getKeyForProvider("openrouter")
+        set(v) = setKeyForProvider("openrouter", v)
+    var googleKey: String
+        get() = getKeyForProvider("google")
+        set(v) = setKeyForProvider("google", v)
+    var customKey: String
+        get() = getKeyForProvider("custom")
+        set(v) = setKeyForProvider("custom", v)
     var customModel: String
-        get() = prefs().getString("custom_model", "") ?: ""
-        set(v) = prefs().edit().putString("custom_model", v).apply()
+        get() = getModelForProvider("custom")
+        set(v) = setModelForProvider("custom", v)
 
     /**
      * Build LlmClient.Config from current settings.
      */
     fun toLlmConfig(): LlmClient.Config {
-        return when (activeProvider) {
-            "anthropic" -> LlmClient.Config("anthropic", anthropicKey, "claude-sonnet-4-6", "https://api.anthropic.com")
-            "openai" -> LlmClient.Config("openai", openaiKey, "gpt-4o", "https://api.openai.com")
-            "minimax" -> LlmClient.Config("anthropic", minimaxKey, "MiniMax-M1-80k", "https://api.minimax.io/anthropic")
-            "google" -> LlmClient.Config("openai", googleKey, "gemini-2.5-flash", "https://generativelanguage.googleapis.com")
-            "openrouter" -> LlmClient.Config("openai", openrouterKey, "anthropic/claude-sonnet-4-6", "https://openrouter.ai/api")
-            "ollama" -> LlmClient.Config("openai", "", "llama3.2", "http://localhost:11434")
-            "custom" -> LlmClient.Config("openai", customKey, customModel, customBaseUrl)
-            else -> LlmClient.Config("anthropic", minimaxKey, "MiniMax-M1-80k", "https://api.minimax.io/anthropic")
+        val provider = activeProvider
+        val key = getKeyForProvider(provider)
+        val model = getModelForProvider(provider)
+        val baseUrl = if (provider == "custom") customBaseUrl else (baseUrls[provider] ?: "")
+
+        // Anthropic-style API (native /v1/messages)
+        val apiType = when (provider) {
+            "anthropic", "minimax" -> "anthropic"
+            else -> "openai"
         }
+
+        return LlmClient.Config(apiType, key, model, baseUrl)
     }
 }

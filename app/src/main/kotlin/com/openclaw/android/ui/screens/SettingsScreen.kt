@@ -35,9 +35,11 @@ private val BORDER = Color(0xFF30363D)
 private val CYAN = Color(0xFF58A6FF)
 private val GREEN = Color(0xFF3FB950)
 private val RED = Color(0xFFF85149)
+private val ORANGE = Color(0xFFD29922)
 private val TEXT = Color(0xFFF0F6FC)
 private val TEXT2 = Color(0xFF8B949E)
 
+// All available providers (for dropdown when adding)
 private val ALL_PROVIDERS = listOf(
     "anthropic" to "Anthropic Claude",
     "openai" to "OpenAI",
@@ -54,31 +56,71 @@ private val ALL_PROVIDERS = listOf(
     "custom" to "Custom API",
 )
 
+// Available services (for "+" button) — Triple(id, name, description)
+data class ServiceDef(val id: String, val name: String, val desc: String)
+private val AVAILABLE_SERVICES = listOf(
+    ServiceDef("github", "GitHub", "Repos, issues, PRs, code search"),
+    ServiceDef("vercel", "Vercel", "Deployments, projects, domains"),
+    ServiceDef("supabase", "Supabase", "Database queries via PostgREST"),
+    ServiceDef("google_workspace", "Google Workspace", "Drive, Sheets, Gmail, Calendar"),
+    ServiceDef("ssh", "SSH Remote", "Connect to remote servers"),
+    ServiceDef("postgres", "PostgreSQL", "SQL queries via SSH tunnel"),
+    ServiceDef("cloudflare", "Cloudflare", "DNS, Workers, Pages"),
+    ServiceDef("notion", "Notion", "Pages, databases, blocks"),
+    ServiceDef("linear", "Linear", "Issues, projects, cycles"),
+    ServiceDef("slack", "Slack", "Messages, channels"),
+    ServiceDef("discord", "Discord", "Bot, messages, channels"),
+    ServiceDef("telegram", "Telegram Bot", "Messages, groups"),
+    ServiceDef("stripe", "Stripe", "Payments, customers"),
+    ServiceDef("resend", "Resend", "Email sending"),
+    ServiceDef("upstash", "Upstash Redis", "Key-value cache"),
+)
+
 @Composable
 fun SettingsScreen(
     onStartService: () -> Unit = {},
     onStopService: () -> Unit = {}
 ) {
     val isRunning by ServiceState.isRunning.collectAsState()
-    var activeProvider by remember { mutableStateOf(AgentConfig.activeProvider) }
-    var selectedModel by remember { mutableStateOf(AgentConfig.getModelForProvider(AgentConfig.activeProvider)) }
-    var tokenInput by remember { mutableStateOf("") }
-    var providerDropdown by remember { mutableStateOf(false) }
-    var modelDropdown by remember { mutableStateOf(false) }
-    var checkingUpdate by remember { mutableStateOf(false) }
-    // Saved tokens list - reload from AgentConfig
-    val savedTokens = remember { mutableStateListOf<Pair<String, String>>() }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // Load saved tokens on init
+    // Dynamic LLM list — only shows providers with saved tokens
+    val savedLlms = remember { mutableStateListOf<Pair<String, String>>() } // id to token
+    var activeProvider by remember { mutableStateOf(AgentConfig.activeProvider) }
+
+    // Dynamic services list
+    val connectedServices = remember { mutableStateListOf<String>() }
+
+    // Load saved data
     LaunchedEffect(Unit) {
-        savedTokens.clear()
-        ALL_PROVIDERS.forEach { (id, name) ->
+        savedLlms.clear()
+        ALL_PROVIDERS.forEach { (id, _) ->
             val key = AgentConfig.getKeyForProvider(id)
-            if (key.isNotBlank()) savedTokens.add(id to key)
+            if (key.isNotBlank() || id == "ollama") savedLlms.add(id to key)
+        }
+        connectedServices.clear()
+        AVAILABLE_SERVICES.forEach { svc ->
+            val key = AgentConfig.getKeyForProvider(svc.id)
+            if (key.isNotBlank()) connectedServices.add(svc.id)
         }
     }
+
+    // Add LLM dialog
+    var showAddLlm by remember { mutableStateOf(false) }
+    var addLlmProvider by remember { mutableStateOf("") }
+    var addLlmToken by remember { mutableStateOf("") }
+    var addLlmDropdown by remember { mutableStateOf(false) }
+
+    // Add service dialog
+    var showAddService by remember { mutableStateOf(false) }
+    var addServiceId by remember { mutableStateOf("") }
+    var addServiceToken by remember { mutableStateOf("") }
+    var addServiceDropdown by remember { mutableStateOf(false) }
+
+    // Model selector
+    var showModelDropdown by remember { mutableStateOf(false) }
+    var selectedModel by remember { mutableStateOf(AgentConfig.getModelForProvider(activeProvider)) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(BG).padding(horizontal = 16.dp),
@@ -105,259 +147,249 @@ fun SettingsScreen(
             }
         }
 
-        // ── LLM PROVIDER + MODEL ──
-        item { SectionLabel("LLM CONFIGURATION") }
+        // ── LLM PROVIDERS (dynamic) ──
         item {
-            Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(10.dp)) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    // Provider dropdown
-                    Text("Provider", color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-                    Spacer(Modifier.height(4.dp))
-                    Box {
-                        OutlinedButton(
-                            onClick = { providerDropdown = true },
-                            modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp),
-                            border = BorderStroke(1.dp, BORDER),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = TEXT)
-                        ) {
-                            Text(ALL_PROVIDERS.find { it.first == activeProvider }?.second ?: activeProvider,
-                                fontFamily = FontFamily.Monospace, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                            Icon(Icons.Default.ArrowDropDown, null)
-                        }
-                        DropdownMenu(expanded = providerDropdown, onDismissRequest = { providerDropdown = false },
-                            modifier = Modifier.background(Color(0xFF1C2333))) {
-                            ALL_PROVIDERS.forEach { (id, name) ->
-                                DropdownMenuItem(
-                                    text = { Text(name, color = if (id == activeProvider) CYAN else TEXT, fontFamily = FontFamily.Monospace, fontSize = 13.sp) },
-                                    onClick = {
-                                        activeProvider = id; AgentConfig.activeProvider = id
-                                        selectedModel = AgentConfig.getModelForProvider(id)
-                                        tokenInput = ""
-                                        providerDropdown = false
-                                    },
-                                    leadingIcon = { if (id == activeProvider) Icon(Icons.Default.Check, null, tint = CYAN, modifier = Modifier.size(16.dp)) }
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(Modifier.height(12.dp))
-
-                    // Model DROPDOWN
-                    Text("Model", color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-                    Spacer(Modifier.height(4.dp))
-                    val providerModels = ModelRegistry.getModelsForProvider(activeProvider)
-                    if (providerModels.isNotEmpty()) {
-                        Box {
-                            OutlinedButton(
-                                onClick = { modelDropdown = true },
-                                modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp),
-                                border = BorderStroke(1.dp, BORDER),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = TEXT)
-                            ) {
-                                val displayName = providerModels.find { it.id == selectedModel }?.displayName ?: selectedModel
-                                Text(displayName.ifBlank { "Select model..." }, fontFamily = FontFamily.Monospace, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                                Icon(Icons.Default.ArrowDropDown, null)
-                            }
-                            DropdownMenu(expanded = modelDropdown, onDismissRequest = { modelDropdown = false },
-                                modifier = Modifier.background(Color(0xFF1C2333)).heightIn(max = 300.dp)) {
-                                providerModels.forEach { model ->
-                                    DropdownMenuItem(
-                                        text = {
-                                            Column {
-                                                Text(model.displayName, color = if (model.id == selectedModel) CYAN else TEXT, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
-                                                Text(model.id, color = TEXT2, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
-                                            }
-                                        },
-                                        onClick = {
-                                            selectedModel = model.id
-                                            AgentConfig.setModelForProvider(activeProvider, model.id)
-                                            modelDropdown = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    } else {
-                        // Custom provider — free text
-                        OutlinedTextField(
-                            value = selectedModel, onValueChange = { selectedModel = it; AgentConfig.setModelForProvider(activeProvider, it) },
-                            label = { Text("Model ID", fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
-                            modifier = Modifier.fillMaxWidth(), singleLine = true,
-                            textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = TEXT),
-                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CYAN, unfocusedBorderColor = BORDER, cursorColor = CYAN, focusedLabelColor = CYAN, unfocusedLabelColor = TEXT2)
-                        )
-                    }
-
-                    if (activeProvider == "custom") {
-                        Spacer(Modifier.height(8.dp))
-                        var baseUrl by remember { mutableStateOf(AgentConfig.customBaseUrl) }
-                        OutlinedTextField(
-                            value = baseUrl, onValueChange = { baseUrl = it; AgentConfig.customBaseUrl = it },
-                            label = { Text("Base URL", fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
-                            modifier = Modifier.fillMaxWidth(), singleLine = true,
-                            textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = TEXT),
-                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CYAN, unfocusedBorderColor = BORDER, cursorColor = CYAN, focusedLabelColor = CYAN, unfocusedLabelColor = TEXT2)
-                        )
-                    }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                SectionLabel("LLM PROVIDERS")
+                IconButton(onClick = { showAddLlm = true; addLlmProvider = ""; addLlmToken = "" }) {
+                    Icon(Icons.Default.Add, "Add LLM", tint = CYAN, modifier = Modifier.size(20.dp))
                 }
             }
         }
 
-        // ── API TOKEN INPUT ──
-        if (activeProvider != "ollama") {
-            item { SectionLabel("API TOKEN") }
+        if (savedLlms.isEmpty()) {
             item {
                 Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(10.dp)) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            OutlinedTextField(
-                                value = tokenInput, onValueChange = { tokenInput = it },
-                                placeholder = { Text("Paste API token here...", color = Color(0xFF484F58), fontFamily = FontFamily.Monospace, fontSize = 12.sp) },
-                                modifier = Modifier.weight(1f), singleLine = true,
-                                visualTransformation = PasswordVisualTransformation(),
-                                textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = TEXT),
-                                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CYAN, unfocusedBorderColor = BORDER, cursorColor = CYAN, focusedContainerColor = Color(0xFF010409), unfocusedContainerColor = Color(0xFF010409)),
-                                shape = RoundedCornerShape(8.dp)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Button(
-                                onClick = {
-                                    if (tokenInput.isNotBlank()) {
-                                        AgentConfig.setKeyForProvider(activeProvider, tokenInput)
-                                        // Update saved list
-                                        savedTokens.removeAll { it.first == activeProvider }
-                                        savedTokens.add(0, activeProvider to tokenInput)
-                                        tokenInput = ""
-                                        Toast.makeText(context, "Token saved for ${ALL_PROVIDERS.find { it.first == activeProvider }?.second}", Toast.LENGTH_SHORT).show()
+                    Text("No LLM configured. Tap + to add a provider.", color = TEXT2, fontSize = 12.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(16.dp))
+                }
+            }
+        }
+
+        items(savedLlms) { (id, token) ->
+            val name = ALL_PROVIDERS.find { it.first == id }?.second ?: id
+            val isActive = activeProvider == id
+            SavedTokenCard(
+                name = name,
+                token = token,
+                isActive = isActive,
+                context = context,
+                onActivate = {
+                    activeProvider = id
+                    AgentConfig.activeProvider = id
+                    selectedModel = AgentConfig.getModelForProvider(id)
+                },
+                onRemove = {
+                    AgentConfig.setKeyForProvider(id, "")
+                    savedLlms.removeAll { it.first == id }
+                    if (activeProvider == id) { activeProvider = savedLlms.firstOrNull()?.first ?: ""; AgentConfig.activeProvider = activeProvider }
+                }
+            )
+        }
+
+        // Model selector (only if active provider set)
+        if (activeProvider.isNotBlank()) {
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(10.dp)) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text("Model", color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                        Spacer(Modifier.height(4.dp))
+                        val models = ModelRegistry.getModelsForProvider(activeProvider)
+                        if (models.isNotEmpty()) {
+                            Box {
+                                OutlinedButton(onClick = { showModelDropdown = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp), border = BorderStroke(1.dp, BORDER), colors = ButtonDefaults.outlinedButtonColors(contentColor = TEXT)) {
+                                    Text(models.find { it.id == selectedModel }?.displayName ?: selectedModel.ifBlank { "Select..." }, fontFamily = FontFamily.Monospace, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                                    Icon(Icons.Default.ArrowDropDown, null)
+                                }
+                                DropdownMenu(expanded = showModelDropdown, onDismissRequest = { showModelDropdown = false }, modifier = Modifier.background(Color(0xFF1C2333)).heightIn(max = 300.dp)) {
+                                    models.forEach { m ->
+                                        DropdownMenuItem(text = { Text(m.displayName, color = if (m.id == selectedModel) CYAN else TEXT, fontFamily = FontFamily.Monospace, fontSize = 13.sp) },
+                                            onClick = { selectedModel = m.id; AgentConfig.setModelForProvider(activeProvider, m.id); showModelDropdown = false })
                                     }
-                                },
-                                enabled = tokenInput.isNotBlank(),
-                                colors = ButtonDefaults.buttonColors(containerColor = if (tokenInput.isNotBlank()) GREEN else BORDER),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
-                            ) {
-                                Text("Input", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                                }
                             }
+                        } else {
+                            OutlinedTextField(value = selectedModel, onValueChange = { selectedModel = it; AgentConfig.setModelForProvider(activeProvider, it) },
+                                placeholder = { Text("model-id", color = Color(0xFF484F58), fontFamily = FontFamily.Monospace, fontSize = 12.sp) },
+                                modifier = Modifier.fillMaxWidth(), singleLine = true,
+                                textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = TEXT),
+                                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CYAN, unfocusedBorderColor = BORDER, cursorColor = CYAN, focusedLabelColor = CYAN, unfocusedLabelColor = TEXT2))
                         }
                     }
                 }
             }
         }
 
-        // ── SAVED TOKENS LIST ──
-        if (savedTokens.isNotEmpty()) {
-            item { SectionLabel("SAVED TOKENS") }
-            items(savedTokens) { (providerId, token) ->
-                val providerName = ALL_PROVIDERS.find { it.first == providerId }?.second ?: providerId
-                SavedTokenRow(providerName, providerId, token, context) { removedId ->
-                    AgentConfig.setKeyForProvider(removedId, "")
-                    savedTokens.removeAll { it.first == removedId }
+        // ── CONNECTED SERVICES (dynamic) ──
+        item {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                SectionLabel("SERVICES")
+                IconButton(onClick = { showAddService = true; addServiceId = ""; addServiceToken = "" }) {
+                    Icon(Icons.Default.Add, "Add Service", tint = CYAN, modifier = Modifier.size(20.dp))
                 }
             }
+        }
+
+        if (connectedServices.isEmpty()) {
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(10.dp)) {
+                    Text("No services connected. Tap + to add.", color = TEXT2, fontSize = 12.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(16.dp))
+                }
+            }
+        }
+
+        items(connectedServices) { id ->
+            val info = AVAILABLE_SERVICES.find { it.id == id }
+            val name = info?.name ?: id
+            val token = AgentConfig.getKeyForProvider(id)
+            SavedTokenCard(name = name, token = token, isActive = false, context = context,
+                onActivate = {}, onRemove = { AgentConfig.setKeyForProvider(id, ""); connectedServices.remove(id) })
         }
 
         // ── NOTIFICATIONS ──
         item { SectionLabel("NOTIFICATIONS") }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(10.dp)) {
-                Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Column {
-                        Text("Push Notifications", color = TEXT, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
-                        Text("Agent task completions & errors", color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-                    }
+                Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column { Text("Push Notifications", color = TEXT, fontSize = 14.sp, fontFamily = FontFamily.Monospace); Text("Agent completions & errors", color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace) }
                     var notif by remember { mutableStateOf(AgentConfig.pushNotificationsEnabled) }
-                    Switch(checked = notif, onCheckedChange = { notif = it; AgentConfig.pushNotificationsEnabled = it },
-                        colors = SwitchDefaults.colors(checkedTrackColor = GREEN, checkedThumbColor = TEXT))
+                    Switch(checked = notif, onCheckedChange = { notif = it; AgentConfig.pushNotificationsEnabled = it }, colors = SwitchDefaults.colors(checkedTrackColor = GREEN, checkedThumbColor = TEXT))
                 }
             }
         }
 
-        // ── UPDATES ──
-        item { SectionLabel("UPDATES") }
-        item {
-            Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(10.dp)) {
-                Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("OpenClaw Android", color = TEXT, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
-                        Text("v0.9.0-alpha", color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-                    }
-                    Button(
-                        onClick = {
-                            checkingUpdate = true
-                            scope.launch {
-                                kotlinx.coroutines.delay(1500)
-                                checkingUpdate = false
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/wayansuardyana-code/android-openclaw-native/releases")).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
-                            }
-                        },
-                        enabled = !checkingUpdate, colors = ButtonDefaults.buttonColors(containerColor = CYAN), shape = RoundedCornerShape(8.dp)
-                    ) {
-                        if (checkingUpdate) Text("...", color = TEXT, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
-                        else { Icon(Icons.Default.SystemUpdate, null, Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text("Check Updates", fontFamily = FontFamily.Monospace, fontSize = 12.sp) }
-                    }
-                }
-            }
-        }
-
-        // ── ABOUT ──
+        // ── UPDATES + ABOUT ──
         item { SectionLabel("ABOUT") }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(10.dp)) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    AboutRow("Version", "0.9.0-alpha")
-                    AboutRow("Tools", "22 (8 device + 9 utility + 5 service)")
-                    AboutRow("Providers", "13")
-                    AboutRow("Device", android.os.Build.MODEL)
-                    AboutRow("Android", "API ${android.os.Build.VERSION.SDK_INT}")
+                Column(Modifier.padding(16.dp)) {
+                    AboutRow("Version", "1.0.1-alpha"); AboutRow("Tools", "28"); AboutRow("Device", android.os.Build.MODEL); AboutRow("Android", "API ${android.os.Build.VERSION.SDK_INT}")
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = {
+                        scope.launch { kotlinx.coroutines.delay(1000); context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/wayansuardyana-code/android-openclaw-native/releases")).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }) }
+                    }, colors = ButtonDefaults.buttonColors(containerColor = CYAN), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.SystemUpdate, null, Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text("Check Updates", fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                    }
                 }
             }
         }
         item { Spacer(Modifier.height(16.dp)) }
     }
+
+    // ── ADD LLM DIALOG ──
+    if (showAddLlm) {
+        AlertDialog(
+            onDismissRequest = { showAddLlm = false },
+            containerColor = SURFACE,
+            title = { Text("Add LLM Provider", color = TEXT, fontFamily = FontFamily.Monospace) },
+            text = {
+                Column {
+                    Box {
+                        OutlinedButton(onClick = { addLlmDropdown = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp), border = BorderStroke(1.dp, BORDER), colors = ButtonDefaults.outlinedButtonColors(contentColor = TEXT)) {
+                            Text(ALL_PROVIDERS.find { it.first == addLlmProvider }?.second ?: "Select provider...", fontFamily = FontFamily.Monospace, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                            Icon(Icons.Default.ArrowDropDown, null)
+                        }
+                        DropdownMenu(expanded = addLlmDropdown, onDismissRequest = { addLlmDropdown = false }, modifier = Modifier.background(Color(0xFF1C2333)).heightIn(max = 300.dp)) {
+                            ALL_PROVIDERS.filter { p -> savedLlms.none { it.first == p.first } }.forEach { (id, name) ->
+                                DropdownMenuItem(text = { Text(name, color = TEXT, fontFamily = FontFamily.Monospace, fontSize = 13.sp) },
+                                    onClick = { addLlmProvider = id; addLlmDropdown = false })
+                            }
+                        }
+                    }
+                    if (addLlmProvider.isNotBlank() && addLlmProvider != "ollama") {
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(value = addLlmToken, onValueChange = { addLlmToken = it },
+                            placeholder = { Text("Paste API token...", color = Color(0xFF484F58), fontFamily = FontFamily.Monospace, fontSize = 12.sp) },
+                            modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(),
+                            textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = TEXT),
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CYAN, unfocusedBorderColor = BORDER, cursorColor = CYAN))
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (addLlmProvider.isNotBlank() && (addLlmToken.isNotBlank() || addLlmProvider == "ollama")) {
+                        AgentConfig.setKeyForProvider(addLlmProvider, addLlmToken)
+                        savedLlms.add(addLlmProvider to addLlmToken)
+                        if (savedLlms.size == 1) { activeProvider = addLlmProvider; AgentConfig.activeProvider = addLlmProvider; selectedModel = AgentConfig.getModelForProvider(addLlmProvider) }
+                        showAddLlm = false
+                        Toast.makeText(context, "Added!", Toast.LENGTH_SHORT).show()
+                    }
+                }) { Text("Add", color = GREEN, fontFamily = FontFamily.Monospace) }
+            },
+            dismissButton = { TextButton(onClick = { showAddLlm = false }) { Text("Cancel", color = TEXT2, fontFamily = FontFamily.Monospace) } }
+        )
+    }
+
+    // ── ADD SERVICE DIALOG ──
+    if (showAddService) {
+        AlertDialog(
+            onDismissRequest = { showAddService = false },
+            containerColor = SURFACE,
+            title = { Text("Connect Service", color = TEXT, fontFamily = FontFamily.Monospace) },
+            text = {
+                Column {
+                    Box {
+                        OutlinedButton(onClick = { addServiceDropdown = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp), border = BorderStroke(1.dp, BORDER), colors = ButtonDefaults.outlinedButtonColors(contentColor = TEXT)) {
+                            val svcName = AVAILABLE_SERVICES.find { it.id == addServiceId }?.name ?: "Select service..."
+                            Text(svcName, fontFamily = FontFamily.Monospace, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                            Icon(Icons.Default.ArrowDropDown, null)
+                        }
+                        DropdownMenu(expanded = addServiceDropdown, onDismissRequest = { addServiceDropdown = false }, modifier = Modifier.background(Color(0xFF1C2333)).heightIn(max = 300.dp)) {
+                            AVAILABLE_SERVICES.filter { svc -> connectedServices.none { it == svc.id } }.forEach { svc ->
+                                DropdownMenuItem(text = { Column { Text(svc.name, color = TEXT, fontFamily = FontFamily.Monospace, fontSize = 13.sp); Text(svc.desc, color = TEXT2, fontFamily = FontFamily.Monospace, fontSize = 10.sp) } },
+                                    onClick = { addServiceId = svc.id; addServiceDropdown = false })
+                            }
+                        }
+                    }
+                    if (addServiceId.isNotBlank()) {
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(value = addServiceToken, onValueChange = { addServiceToken = it },
+                            placeholder = { Text("API token / key...", color = Color(0xFF484F58), fontFamily = FontFamily.Monospace, fontSize = 12.sp) },
+                            modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation(),
+                            textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = TEXT),
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CYAN, unfocusedBorderColor = BORDER, cursorColor = CYAN))
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (addServiceId.isNotBlank() && addServiceToken.isNotBlank()) {
+                        AgentConfig.setKeyForProvider(addServiceId, addServiceToken)
+                        connectedServices.add(addServiceId)
+                        showAddService = false
+                        Toast.makeText(context, "Connected!", Toast.LENGTH_SHORT).show()
+                    }
+                }) { Text("Connect", color = GREEN, fontFamily = FontFamily.Monospace) }
+            },
+            dismissButton = { TextButton(onClick = { showAddService = false }) { Text("Cancel", color = TEXT2, fontFamily = FontFamily.Monospace) } }
+        )
+    }
 }
 
 @Composable
-private fun SavedTokenRow(providerName: String, providerId: String, token: String, context: Context, onRemove: (String) -> Unit) {
+private fun SavedTokenCard(name: String, token: String, isActive: Boolean, context: Context, onActivate: () -> Unit, onRemove: () -> Unit) {
     var visible by remember { mutableStateOf(false) }
-    Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
-        Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = if (isActive) Color(0xFF1C2333) else SURFACE),
+        shape = RoundedCornerShape(8.dp),
+        border = if (isActive) BorderStroke(1.dp, CYAN) else null,
+        modifier = Modifier.fillMaxWidth().clickable { onActivate() }
+    ) {
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (isActive) { Box(Modifier.size(8.dp).background(GREEN, RoundedCornerShape(4.dp))); Spacer(Modifier.width(8.dp)) }
             Column(Modifier.weight(1f)) {
-                Text(providerName, color = CYAN, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                Text(
-                    if (visible) token else token.take(8) + "•".repeat(minOf(20, token.length - 8).coerceAtLeast(0)),
-                    color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace, maxLines = 1
-                )
+                Text(name, color = if (isActive) CYAN else TEXT, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                if (token.isNotBlank()) {
+                    Text(if (visible) token else token.take(8) + "•".repeat(minOf(16, token.length - 8).coerceAtLeast(0)),
+                        color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace, maxLines = 1)
+                }
             }
-            // Eye toggle
-            IconButton(onClick = { visible = !visible }, modifier = Modifier.size(32.dp)) {
-                Icon(if (visible) Icons.Default.VisibilityOff else Icons.Default.Visibility, "Toggle", tint = TEXT2, modifier = Modifier.size(16.dp))
-            }
-            // Copy
-            IconButton(onClick = {
-                val clip = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                clip.setPrimaryClip(ClipData.newPlainText("token", token))
-                Toast.makeText(context, "Copied!", Toast.LENGTH_SHORT).show()
-            }, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Default.ContentCopy, "Copy", tint = TEXT2, modifier = Modifier.size(16.dp))
-            }
-            // Delete
-            IconButton(onClick = { onRemove(providerId) }, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Default.Delete, "Remove", tint = Color(0xFFF85149), modifier = Modifier.size(16.dp))
-            }
+            IconButton(onClick = { visible = !visible }, modifier = Modifier.size(32.dp)) { Icon(if (visible) Icons.Default.VisibilityOff else Icons.Default.Visibility, "Toggle", tint = TEXT2, modifier = Modifier.size(16.dp)) }
+            IconButton(onClick = { val clip = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager; clip.setPrimaryClip(ClipData.newPlainText("token", token)); Toast.makeText(context, "Copied!", Toast.LENGTH_SHORT).show() }, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.ContentCopy, "Copy", tint = TEXT2, modifier = Modifier.size(16.dp)) }
+            IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.Delete, "Remove", tint = RED, modifier = Modifier.size(16.dp)) }
         }
     }
 }
 
-@Composable
-private fun SectionLabel(text: String) {
-    Text(text, color = TEXT2, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, letterSpacing = 1.sp, modifier = Modifier.padding(top = 8.dp))
-}
-
-@Composable
-private fun AboutRow(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, color = TEXT2, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-        Text(value, color = TEXT, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-    }
-}
+@Composable private fun SectionLabel(text: String) { Text(text, color = TEXT2, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, letterSpacing = 1.sp, modifier = Modifier.padding(top = 8.dp)) }
+@Composable private fun AboutRow(label: String, value: String) { Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.SpaceBetween) { Text(label, color = TEXT2, fontSize = 12.sp, fontFamily = FontFamily.Monospace); Text(value, color = TEXT, fontSize = 12.sp, fontFamily = FontFamily.Monospace) } }

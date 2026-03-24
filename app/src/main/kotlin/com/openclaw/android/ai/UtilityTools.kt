@@ -6,9 +6,15 @@ import com.openclaw.android.OpenClawApplication
 import com.openclaw.android.util.ServiceState
 import net.objecthunter.exp4j.ExpressionBuilder
 import org.jsoup.Jsoup
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Typeface
+import android.graphics.pdf.PdfDocument
 import java.io.BufferedReader
 import java.io.File
+import java.io.FileOutputStream
 import java.io.InputStreamReader
+import org.dhatim.fastexcel.Workbook
 
 /**
  * Non-Android utility tools: shell, web scraper, calculator, file gen.
@@ -140,6 +146,32 @@ object UtilityTools {
             description = "List all running and completed sub-agents with their status and results.",
             inputSchema = mapOf("type" to "object", "properties" to emptyMap<String, Any>())
         ),
+        ToolDef(
+            name = "generate_xlsx",
+            description = "Generate an Excel (.xlsx) file with headers and rows. Saved to app documents folder.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "filename" to mapOf("type" to "string", "description" to "Output filename ending in .xlsx (saved to Documents/OpenClaw/)"),
+                    "headers" to mapOf("type" to "array", "items" to mapOf("type" to "string"), "description" to "Column headers"),
+                    "rows" to mapOf("type" to "array", "items" to mapOf("type" to "array", "items" to mapOf("type" to "string")), "description" to "Data rows, each an array of cell values")
+                ),
+                "required" to listOf("filename", "headers", "rows")
+            )
+        ),
+        ToolDef(
+            name = "generate_pdf",
+            description = "Generate a PDF file with text content and optional title. Saved to app documents folder.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "filename" to mapOf("type" to "string", "description" to "Output filename ending in .pdf (saved to Documents/OpenClaw/)"),
+                    "content" to mapOf("type" to "string", "description" to "Text content for the PDF body"),
+                    "title" to mapOf("type" to "string", "description" to "Optional title displayed at the top of the PDF")
+                ),
+                "required" to listOf("filename", "content")
+            )
+        ),
     )
 
     suspend fun executeTool(name: String, args: JsonObject): String {
@@ -155,6 +187,8 @@ object UtilityTools {
                 "write_file" -> writeFile(args.get("path").asString, args.get("content").asString)
                 "list_files" -> listFiles(args.get("path").asString)
                 "generate_csv" -> generateCsv(args)
+                "generate_xlsx" -> generateXlsx(args)
+                "generate_pdf" -> generatePdf(args)
                 "http_request" -> httpRequest(args)
                 "spawn_sub_agent" -> {
                     val title = args.get("task_title").asString
@@ -313,6 +347,141 @@ object UtilityTools {
         file.writeText(sb.toString())
 
         return """{"success":true,"path":"${file.absolutePath}","rows":${rows.size}}"""
+    }
+
+    private fun generateXlsx(args: JsonObject): String {
+        val filename = args.get("filename").asString
+        val headers = args.getAsJsonArray("headers").map { it.asString }
+        val rows = args.getAsJsonArray("rows").map { row ->
+            row.asJsonArray.map { it.asString }
+        }
+
+        val dir = File(OpenClawApplication.instance.getExternalFilesDir(null), "documents")
+        dir.mkdirs()
+        val file = File(dir, if (filename.endsWith(".xlsx")) filename else "$filename.xlsx")
+
+        FileOutputStream(file).use { fos ->
+            val wb = Workbook(fos, "OpenClaw", "1.0")
+            val ws = wb.newWorksheet("Sheet1")
+
+            // Write headers (row 0)
+            headers.forEachIndexed { col, header ->
+                ws.value(0, col, header)
+            }
+
+            // Write data rows
+            rows.forEachIndexed { rowIdx, row ->
+                row.forEachIndexed { col, cell ->
+                    // Try to write as number if possible, otherwise as string
+                    val num = cell.toDoubleOrNull()
+                    if (num != null) {
+                        ws.value(rowIdx + 1, col, num)
+                    } else {
+                        ws.value(rowIdx + 1, col, cell)
+                    }
+                }
+            }
+
+            wb.finish()
+        }
+
+        return """{"success":true,"path":"${file.absolutePath}","rows":${rows.size},"columns":${headers.size}}"""
+    }
+
+    private fun generatePdf(args: JsonObject): String {
+        val filename = args.get("filename").asString
+        val content = args.get("content").asString
+        val title = args.get("title")?.asString
+
+        val dir = File(OpenClawApplication.instance.getExternalFilesDir(null), "documents")
+        dir.mkdirs()
+        val file = File(dir, if (filename.endsWith(".pdf")) filename else "$filename.pdf")
+
+        val pageWidth = 595  // A4 width in points (72 dpi)
+        val pageHeight = 842 // A4 height in points
+        val marginLeft = 50f
+        val marginTop = 60f
+        val marginRight = 50f
+        val marginBottom = 60f
+        val usableWidth = pageWidth - marginLeft - marginRight
+
+        val document = PdfDocument()
+
+        val bodyPaint = Paint().apply {
+            color = android.graphics.Color.BLACK
+            textSize = 12f
+            typeface = Typeface.create(Typeface.SERIF, Typeface.NORMAL)
+            isAntiAlias = true
+        }
+
+        val titlePaint = Paint().apply {
+            color = android.graphics.Color.BLACK
+            textSize = 20f
+            typeface = Typeface.create(Typeface.DEFAULT_BOLD, Typeface.BOLD)
+            isAntiAlias = true
+        }
+
+        val lineHeight = bodyPaint.textSize * 1.5f
+        var pageNumber = 1
+        var pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create()
+        var page = document.startPage(pageInfo)
+        var canvas: Canvas = page.canvas
+        var yPosition = marginTop
+
+        // Draw title if present
+        if (title != null) {
+            canvas.drawText(title, marginLeft, yPosition + titlePaint.textSize, titlePaint)
+            yPosition += titlePaint.textSize * 2f
+        }
+
+        // Word-wrap and draw body content
+        val lines = content.split("\n")
+        for (line in lines) {
+            // Wrap long lines
+            val words = line.split(" ")
+            val wrappedLine = StringBuilder()
+            for (word in words) {
+                val test = if (wrappedLine.isEmpty()) word else "$wrappedLine $word"
+                if (bodyPaint.measureText(test) > usableWidth && wrappedLine.isNotEmpty()) {
+                    // Flush current line
+                    yPosition += lineHeight
+                    if (yPosition > pageHeight - marginBottom) {
+                        document.finishPage(page)
+                        pageNumber++
+                        pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create()
+                        page = document.startPage(pageInfo)
+                        canvas = page.canvas
+                        yPosition = marginTop + lineHeight
+                    }
+                    canvas.drawText(wrappedLine.toString(), marginLeft, yPosition, bodyPaint)
+                    wrappedLine.clear()
+                    wrappedLine.append(word)
+                } else {
+                    if (wrappedLine.isNotEmpty()) wrappedLine.append(" ")
+                    wrappedLine.append(word)
+                }
+            }
+            // Flush remaining text in this line
+            yPosition += lineHeight
+            if (yPosition > pageHeight - marginBottom) {
+                document.finishPage(page)
+                pageNumber++
+                pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create()
+                page = document.startPage(pageInfo)
+                canvas = page.canvas
+                yPosition = marginTop + lineHeight
+            }
+            canvas.drawText(wrappedLine.toString(), marginLeft, yPosition, bodyPaint)
+        }
+
+        document.finishPage(page)
+
+        FileOutputStream(file).use { fos ->
+            document.writeTo(fos)
+        }
+        document.close()
+
+        return """{"success":true,"path":"${file.absolutePath}","pages":$pageNumber}"""
     }
 
     private fun httpRequest(args: JsonObject): String {

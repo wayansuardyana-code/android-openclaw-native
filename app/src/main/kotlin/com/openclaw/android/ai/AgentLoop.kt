@@ -28,9 +28,42 @@ class AgentLoop(private val llmClient: LlmClient) {
 
     /** Parse JSON leniently — LLM output is often not strictly valid */
     private fun <T> parseLenient(json: String, clazz: Class<T>): T {
-        val reader = JsonReader(StringReader(json))
+        val cleaned = cleanLlmJson(json)
+        val reader = JsonReader(StringReader(cleaned))
         reader.isLenient = true
         return gson.fromJson(reader, clazz)
+    }
+
+    /**
+     * Clean up LLM JSON output — some providers (MiniMax, etc.) return JSON
+     * wrapped in XML-like tags or with trailing garbage.
+     * Extracts the JSON object/array and discards everything after.
+     */
+    private fun cleanLlmJson(raw: String): String {
+        val trimmed = raw.trim()
+        // Find the outermost JSON structure
+        val startChar = trimmed.firstOrNull() ?: return raw
+        val endChar = if (startChar == '{') '}' else if (startChar == '[') ']' else return raw
+
+        var depth = 0
+        var inString = false
+        var escape = false
+        for (i in trimmed.indices) {
+            val c = trimmed[i]
+            if (escape) { escape = false; continue }
+            if (c == '\\' && inString) { escape = true; continue }
+            if (c == '"' && !escape) { inString = !inString; continue }
+            if (inString) continue
+            if (c == startChar) depth++
+            if (c == endChar) {
+                depth--
+                if (depth == 0) {
+                    return trimmed.substring(0, i + 1)
+                }
+            }
+        }
+        // JSON not properly closed — try to close it
+        return trimmed.substringBefore("</") + endChar.toString().repeat(depth.coerceAtLeast(0))
     }
 
     private val _isThinking = MutableStateFlow(false)

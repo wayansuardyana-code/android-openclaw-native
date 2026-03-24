@@ -112,6 +112,33 @@ object AndroidTools {
             )
         ),
         ToolDef(
+            name = "android_media_control",
+            description = "Control media playback (YouTube, Spotify, music players, etc.) without needing to find UI buttons. Actions: play, pause, next, previous, stop. Much more reliable than trying to tap play/pause buttons.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "action" to mapOf("type" to "string", "description" to "One of: play, pause, next, previous, stop",
+                        "enum" to listOf("play", "pause", "next", "previous", "stop"))
+                ),
+                "required" to listOf("action")
+            )
+        ),
+        ToolDef(
+            name = "android_volume",
+            description = "Control device volume. Set absolute level (0-15) or adjust relative (up/down). Streams: music (media/YouTube), ring (ringtone), alarm, notification.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "action" to mapOf("type" to "string", "description" to "One of: set, up, down, mute, unmute",
+                        "enum" to listOf("set", "up", "down", "mute", "unmute")),
+                    "level" to mapOf("type" to "number", "description" to "Volume level 0-15 (only for 'set' action)"),
+                    "stream" to mapOf("type" to "string", "description" to "Audio stream: music (default), ring, alarm, notification",
+                        "enum" to listOf("music", "ring", "alarm", "notification"))
+                ),
+                "required" to listOf("action")
+            )
+        ),
+        ToolDef(
             name = "android_read_notifications",
             description = "Read all current notifications on the device. Returns app name, title, text for each notification.",
             inputSchema = mapOf("type" to "object", "properties" to emptyMap<String, Any>())
@@ -191,6 +218,50 @@ object AndroidTools {
                         ?: return """{"error":"Accessibility service not enabled"}"""
                     val success = reader.pressEnter()
                     """{"success":$success}"""
+                }
+                "android_media_control" -> {
+                    val action = args.get("action")?.asString ?: "pause"
+                    val context = com.openclaw.android.OpenClawApplication.instance
+                    val audioManager = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+                    val keyCode = when (action) {
+                        "play" -> android.view.KeyEvent.KEYCODE_MEDIA_PLAY
+                        "pause" -> android.view.KeyEvent.KEYCODE_MEDIA_PAUSE
+                        "next" -> android.view.KeyEvent.KEYCODE_MEDIA_NEXT
+                        "previous" -> android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS
+                        "stop" -> android.view.KeyEvent.KEYCODE_MEDIA_STOP
+                        else -> android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+                    }
+                    val downEvent = android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, keyCode)
+                    val upEvent = android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, keyCode)
+                    audioManager.dispatchMediaKeyEvent(downEvent)
+                    audioManager.dispatchMediaKeyEvent(upEvent)
+                    """{"success":true,"action":"$action"}"""
+                }
+                "android_volume" -> {
+                    val action = args.get("action")?.asString ?: "up"
+                    val streamName = args.get("stream")?.asString ?: "music"
+                    val context = com.openclaw.android.OpenClawApplication.instance
+                    val audioManager = context.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+                    val stream = when (streamName) {
+                        "ring" -> android.media.AudioManager.STREAM_RING
+                        "alarm" -> android.media.AudioManager.STREAM_ALARM
+                        "notification" -> android.media.AudioManager.STREAM_NOTIFICATION
+                        else -> android.media.AudioManager.STREAM_MUSIC
+                    }
+                    val maxVol = audioManager.getStreamMaxVolume(stream)
+                    val currentVol = audioManager.getStreamVolume(stream)
+                    when (action) {
+                        "set" -> {
+                            val level = args.get("level")?.asInt?.coerceIn(0, maxVol) ?: currentVol
+                            audioManager.setStreamVolume(stream, level, 0)
+                        }
+                        "up" -> audioManager.adjustStreamVolume(stream, android.media.AudioManager.ADJUST_RAISE, 0)
+                        "down" -> audioManager.adjustStreamVolume(stream, android.media.AudioManager.ADJUST_LOWER, 0)
+                        "mute" -> audioManager.adjustStreamVolume(stream, android.media.AudioManager.ADJUST_MUTE, 0)
+                        "unmute" -> audioManager.adjustStreamVolume(stream, android.media.AudioManager.ADJUST_UNMUTE, 0)
+                    }
+                    val newVol = audioManager.getStreamVolume(stream)
+                    """{"success":true,"stream":"$streamName","volume":$newVol,"max":$maxVol}"""
                 }
                 "android_open_app" -> {
                     val pkg = args.get("packageName").asString

@@ -88,7 +88,7 @@ POST /agent/chat                  # {message, provider, apiKey, model, baseUrl} 
 - POST /agent/chat endpoint accepts {message, provider, apiKey, model, baseUrl}
 - Max 10 tool-calling steps per agent run
 
-## LLM Tools (24 total)
+## LLM Tools (26 total)
 ### Android Device Tools (8)
 android_read_screen, android_tap, android_swipe, android_type_text,
 android_press_back, android_press_home, android_open_app, android_read_notifications
@@ -98,8 +98,9 @@ run_shell_command, web_scrape, web_search, calculator,
 read_file, write_file, list_files, generate_csv, http_request,
 spawn_sub_agent, list_sub_agents
 
-### Service Tools (5) — require API tokens
-github_api, vercel_api, supabase_query, google_workspace, authenticated_api
+### Service Tools (7) — require API tokens
+github_api, vercel_api, supabase_query, google_workspace, authenticated_api,
+ssh_execute, postgres_query (via SSH tunnel)
 
 ## File System
 - Agent config files: `filesDir/agent_config/` (identity.md, memory.md, system_prompt.md, skills.md)
@@ -117,6 +118,12 @@ github_api, vercel_api, supabase_query, google_workspace, authenticated_api
 - v0.6.0: Toggle start/stop button, check for updates, push notification toggle
 - v0.6.0: Logs copyable (SelectionContainer), Terminal tab with shell execution
 - v0.6.0: File editor saves to disk, system prompt from files
+
+## SSH & PostgreSQL
+- ssh_execute: SSHJ library, connects to remote server, runs commands, 30s timeout
+- postgres_query: runs psql via SSH tunnel (no direct JDBC needed)
+- SSH credentials stored per-provider: ssh_host, ssh_user, ssh (password)
+- PostgreSQL: db_user, db_host, db_port stored in AgentConfig
 
 ## Auth Connectors (how tokens are stored)
 - All service tokens stored via AgentConfig.setKeyForProvider(provider, key)

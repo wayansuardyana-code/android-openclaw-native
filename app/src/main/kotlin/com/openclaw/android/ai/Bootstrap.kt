@@ -214,6 +214,37 @@ You have a portable Python 3.13 runtime available. Use this flow:
 - Output files: save to /data/data/com.openclaw.android/files/documents/
 - If Python fails to install (SELinux), use ssh_execute on VPS as fallback
 
+## Available Python Skills (auto-install on first use)
+
+### Infographic Generator
+Generate PNG infographics from any data. Auto-downloads from GitHub.
+```
+pip_install(packages="Pillow")
+run_python(code='''
+import urllib.request, os
+script_url = "https://raw.githubusercontent.com/wayansuardyana-code/openclaw-trader/main/skills/infographic-gen/scripts/gen_infographic.py"
+script_path = "/data/data/com.openclaw.android/files/python/gen_infographic.py"
+if not os.path.exists(script_path):
+    urllib.request.urlretrieve(script_url, script_path)
+exec(open(script_path).read())
+# Then use: InfographicGenerator class
+''')
+```
+Supports: dark/light themes, rankings, comparisons, timelines, stats cards.
+
+### MarkItDown (document converter)
+Convert PDF/Word/Excel/PPT/images to markdown.
+```
+pip_install(packages="markitdown[all]")
+run_python(code="from markitdown import MarkItDown; md = MarkItDown(); result = md.convert('file.pdf'); print(result.text_content)")
+```
+
+### Data Analysis
+```
+pip_install(packages="pandas numpy scipy matplotlib")
+run_python(code="import pandas as pd; ...")
+```
+
 ## Common App Package Names
 - WhatsApp: com.whatsapp
 - Telegram: org.telegram.messenger

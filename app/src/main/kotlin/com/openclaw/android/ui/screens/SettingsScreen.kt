@@ -1,7 +1,11 @@
 package com.openclaw.android.ui.screens
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
@@ -21,6 +25,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openclaw.android.ai.AgentConfig
+import com.openclaw.android.ai.ModelRegistry
 import com.openclaw.android.util.ServiceState
 import kotlinx.coroutines.launch
 
@@ -30,25 +35,23 @@ private val BORDER = Color(0xFF30363D)
 private val CYAN = Color(0xFF58A6FF)
 private val GREEN = Color(0xFF3FB950)
 private val RED = Color(0xFFF85149)
-private val ORANGE = Color(0xFFD29922)
 private val TEXT = Color(0xFFF0F6FC)
 private val TEXT2 = Color(0xFF8B949E)
 
-// All providers with their display names and base URLs
 private val ALL_PROVIDERS = listOf(
-    Triple("anthropic", "Anthropic Claude", "https://api.anthropic.com"),
-    Triple("openai", "OpenAI", "https://api.openai.com"),
-    Triple("minimax", "MiniMax", "https://api.minimax.io/anthropic"),
-    Triple("google", "Google Gemini", "https://generativelanguage.googleapis.com"),
-    Triple("openrouter", "OpenRouter", "https://openrouter.ai/api"),
-    Triple("deepseek", "DeepSeek", "https://api.deepseek.com"),
-    Triple("mistral", "Mistral AI", "https://api.mistral.ai"),
-    Triple("groq", "Groq", "https://api.groq.com/openai"),
-    Triple("xai", "xAI (Grok)", "https://api.x.ai"),
-    Triple("together", "Together AI", "https://api.together.xyz"),
-    Triple("fireworks", "Fireworks AI", "https://api.fireworks.ai/inference"),
-    Triple("ollama", "Ollama (Local)", "http://localhost:11434"),
-    Triple("custom", "Custom API", ""),
+    "anthropic" to "Anthropic Claude",
+    "openai" to "OpenAI",
+    "minimax" to "MiniMax",
+    "google" to "Google Gemini",
+    "openrouter" to "OpenRouter",
+    "deepseek" to "DeepSeek",
+    "mistral" to "Mistral AI",
+    "groq" to "Groq",
+    "xai" to "xAI (Grok)",
+    "together" to "Together AI",
+    "fireworks" to "Fireworks AI",
+    "ollama" to "Ollama (Local)",
+    "custom" to "Custom API",
 )
 
 @Composable
@@ -58,12 +61,24 @@ fun SettingsScreen(
 ) {
     val isRunning by ServiceState.isRunning.collectAsState()
     var activeProvider by remember { mutableStateOf(AgentConfig.activeProvider) }
-    var apiKey by remember { mutableStateOf(AgentConfig.getKeyForProvider(AgentConfig.activeProvider)) }
-    var modelName by remember { mutableStateOf(AgentConfig.getModelForProvider(AgentConfig.activeProvider)) }
-    var providerDropdownExpanded by remember { mutableStateOf(false) }
+    var selectedModel by remember { mutableStateOf(AgentConfig.getModelForProvider(AgentConfig.activeProvider)) }
+    var tokenInput by remember { mutableStateOf("") }
+    var providerDropdown by remember { mutableStateOf(false) }
+    var modelDropdown by remember { mutableStateOf(false) }
     var checkingUpdate by remember { mutableStateOf(false) }
+    // Saved tokens list - reload from AgentConfig
+    val savedTokens = remember { mutableStateListOf<Pair<String, String>>() }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
+    // Load saved tokens on init
+    LaunchedEffect(Unit) {
+        savedTokens.clear()
+        ALL_PROVIDERS.forEach { (id, name) ->
+            val key = AgentConfig.getKeyForProvider(id)
+            if (key.isNotBlank()) savedTokens.add(id to key)
+        }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(BG).padding(horizontal = 16.dp),
@@ -75,31 +90,23 @@ fun SettingsScreen(
             Spacer(Modifier.height(8.dp))
         }
 
-        // ── 1) SERVICE TOGGLE ──────────────────────────
+        // ── SERVICE TOGGLE ──
         item { SectionLabel("SERVICE") }
         item {
             Button(
                 onClick = { if (isRunning) onStopService() else onStartService() },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isRunning) RED else GREEN
-                ),
+                colors = ButtonDefaults.buttonColors(containerColor = if (isRunning) RED else GREEN),
                 shape = RoundedCornerShape(10.dp),
                 modifier = Modifier.fillMaxWidth().height(48.dp)
             ) {
-                Icon(
-                    if (isRunning) Icons.Default.Stop else Icons.Default.PlayArrow,
-                    null, Modifier.size(20.dp)
-                )
+                Icon(if (isRunning) Icons.Default.Stop else Icons.Default.PlayArrow, null, Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
-                Text(
-                    if (isRunning) "Stop Service" else "Start Service",
-                    fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold
-                )
+                Text(if (isRunning) "Stop Service" else "Start Service", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
             }
         }
 
-        // ── 2) LLM PROVIDER (dropdown + single API key) ──
-        item { SectionLabel("LLM PROVIDER") }
+        // ── LLM PROVIDER + MODEL ──
+        item { SectionLabel("LLM CONFIGURATION") }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(10.dp)) {
                 Column(modifier = Modifier.padding(12.dp)) {
@@ -108,34 +115,27 @@ fun SettingsScreen(
                     Spacer(Modifier.height(4.dp))
                     Box {
                         OutlinedButton(
-                            onClick = { providerDropdownExpanded = true },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp),
+                            onClick = { providerDropdown = true },
+                            modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp),
                             border = BorderStroke(1.dp, BORDER),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = TEXT)
                         ) {
-                            val displayName = ALL_PROVIDERS.find { it.first == activeProvider }?.second ?: activeProvider
-                            Text(displayName, fontFamily = FontFamily.Monospace, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                            Text(ALL_PROVIDERS.find { it.first == activeProvider }?.second ?: activeProvider,
+                                fontFamily = FontFamily.Monospace, fontSize = 14.sp, modifier = Modifier.weight(1f))
                             Icon(Icons.Default.ArrowDropDown, null)
                         }
-                        DropdownMenu(
-                            expanded = providerDropdownExpanded,
-                            onDismissRequest = { providerDropdownExpanded = false },
-                            modifier = Modifier.background(Color(0xFF1C2333))
-                        ) {
-                            ALL_PROVIDERS.forEach { (id, name, _) ->
+                        DropdownMenu(expanded = providerDropdown, onDismissRequest = { providerDropdown = false },
+                            modifier = Modifier.background(Color(0xFF1C2333))) {
+                            ALL_PROVIDERS.forEach { (id, name) ->
                                 DropdownMenuItem(
                                     text = { Text(name, color = if (id == activeProvider) CYAN else TEXT, fontFamily = FontFamily.Monospace, fontSize = 13.sp) },
                                     onClick = {
-                                        activeProvider = id
-                                        AgentConfig.activeProvider = id
-                                        apiKey = AgentConfig.getKeyForProvider(id)
-                                        modelName = AgentConfig.getModelForProvider(id)
-                                        providerDropdownExpanded = false
+                                        activeProvider = id; AgentConfig.activeProvider = id
+                                        selectedModel = AgentConfig.getModelForProvider(id)
+                                        tokenInput = ""
+                                        providerDropdown = false
                                     },
-                                    leadingIcon = {
-                                        if (id == activeProvider) Icon(Icons.Default.Check, null, tint = CYAN, modifier = Modifier.size(16.dp))
-                                    }
+                                    leadingIcon = { if (id == activeProvider) Icon(Icons.Default.Check, null, tint = CYAN, modifier = Modifier.size(16.dp)) }
                                 )
                             }
                         }
@@ -143,117 +143,101 @@ fun SettingsScreen(
 
                     Spacer(Modifier.height(12.dp))
 
-                    // API Key (single field for active provider)
-                    if (activeProvider != "ollama") {
-                        OutlinedTextField(
-                            value = apiKey,
-                            onValueChange = {
-                                apiKey = it
-                                AgentConfig.setKeyForProvider(activeProvider, it)
-                            },
-                            label = { Text("API Key", fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
-                            visualTransformation = if (apiKey.isNotEmpty()) PasswordVisualTransformation() else VisualTransformation.None,
-                            modifier = Modifier.fillMaxWidth(),
-                            textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = TEXT),
-                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CYAN, unfocusedBorderColor = BORDER, cursorColor = CYAN, focusedLabelColor = CYAN, unfocusedLabelColor = TEXT2),
-                            singleLine = true,
-                            trailingIcon = {
-                                if (apiKey.isNotEmpty()) {
-                                    Icon(Icons.Default.Check, null, tint = GREEN, modifier = Modifier.size(16.dp))
+                    // Model DROPDOWN
+                    Text("Model", color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                    Spacer(Modifier.height(4.dp))
+                    val providerModels = ModelRegistry.getModelsForProvider(activeProvider)
+                    if (providerModels.isNotEmpty()) {
+                        Box {
+                            OutlinedButton(
+                                onClick = { modelDropdown = true },
+                                modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(1.dp, BORDER),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = TEXT)
+                            ) {
+                                val displayName = providerModels.find { it.id == selectedModel }?.displayName ?: selectedModel
+                                Text(displayName.ifBlank { "Select model..." }, fontFamily = FontFamily.Monospace, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                                Icon(Icons.Default.ArrowDropDown, null)
+                            }
+                            DropdownMenu(expanded = modelDropdown, onDismissRequest = { modelDropdown = false },
+                                modifier = Modifier.background(Color(0xFF1C2333)).heightIn(max = 300.dp)) {
+                                providerModels.forEach { model ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Column {
+                                                Text(model.displayName, color = if (model.id == selectedModel) CYAN else TEXT, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+                                                Text(model.id, color = TEXT2, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+                                            }
+                                        },
+                                        onClick = {
+                                            selectedModel = model.id
+                                            AgentConfig.setModelForProvider(activeProvider, model.id)
+                                            modelDropdown = false
+                                        }
+                                    )
                                 }
                             }
+                        }
+                    } else {
+                        // Custom provider — free text
+                        OutlinedTextField(
+                            value = selectedModel, onValueChange = { selectedModel = it; AgentConfig.setModelForProvider(activeProvider, it) },
+                            label = { Text("Model ID", fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
+                            modifier = Modifier.fillMaxWidth(), singleLine = true,
+                            textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = TEXT),
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CYAN, unfocusedBorderColor = BORDER, cursorColor = CYAN, focusedLabelColor = CYAN, unfocusedLabelColor = TEXT2)
                         )
                     }
 
-                    Spacer(Modifier.height(8.dp))
-
-                    // Model name (editable)
-                    OutlinedTextField(
-                        value = modelName,
-                        onValueChange = {
-                            modelName = it
-                            AgentConfig.setModelForProvider(activeProvider, it)
-                        },
-                        label = { Text("Model", fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
-                        modifier = Modifier.fillMaxWidth(),
-                        textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = TEXT),
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CYAN, unfocusedBorderColor = BORDER, cursorColor = CYAN, focusedLabelColor = CYAN, unfocusedLabelColor = TEXT2),
-                        singleLine = true
-                    )
-
-                    // Base URL for custom provider
                     if (activeProvider == "custom") {
                         Spacer(Modifier.height(8.dp))
                         var baseUrl by remember { mutableStateOf(AgentConfig.customBaseUrl) }
                         OutlinedTextField(
-                            value = baseUrl,
-                            onValueChange = { baseUrl = it; AgentConfig.customBaseUrl = it },
+                            value = baseUrl, onValueChange = { baseUrl = it; AgentConfig.customBaseUrl = it },
                             label = { Text("Base URL", fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth(), singleLine = true,
                             textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = TEXT),
-                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CYAN, unfocusedBorderColor = BORDER, cursorColor = CYAN, focusedLabelColor = CYAN, unfocusedLabelColor = TEXT2),
-                            singleLine = true
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CYAN, unfocusedBorderColor = BORDER, cursorColor = CYAN, focusedLabelColor = CYAN, unfocusedLabelColor = TEXT2)
                         )
                     }
                 }
             }
         }
 
-        // ── 5) NOTIFICATIONS ──────────────────────────
-        item { SectionLabel("NOTIFICATIONS") }
-        item {
-            Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(10.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text("Push Notifications", color = TEXT, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
-                        Text("Get notified when agent completes tasks", color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-                    }
-                    var notifEnabled by remember { mutableStateOf(AgentConfig.pushNotificationsEnabled) }
-                    Switch(
-                        checked = notifEnabled,
-                        onCheckedChange = { notifEnabled = it; AgentConfig.pushNotificationsEnabled = it },
-                        colors = SwitchDefaults.colors(checkedTrackColor = GREEN, checkedThumbColor = TEXT)
-                    )
-                }
-            }
-        }
-
-        // ── 5) CHECK FOR UPDATES ──────────────────────
-        item { SectionLabel("UPDATES") }
-        item {
-            Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(10.dp)) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("OpenClaw Android", color = TEXT, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
-                            Text("v0.5.2-alpha", color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-                        }
-                        Button(
-                            onClick = {
-                                checkingUpdate = true
-                                scope.launch {
-                                    kotlinx.coroutines.delay(2000)
-                                    checkingUpdate = false
-                                    // Open GitHub releases page
-                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/wayansuardyana-code/android-openclaw-native/releases"))
-                                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    context.startActivity(intent)
-                                }
-                            },
-                            enabled = !checkingUpdate,
-                            colors = ButtonDefaults.buttonColors(containerColor = CYAN),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            if (checkingUpdate) {
-                                CircularProgressIndicator(color = TEXT, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                            } else {
-                                Icon(Icons.Default.SystemUpdate, null, Modifier.size(16.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("Check Updates", fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+        // ── API TOKEN INPUT ──
+        if (activeProvider != "ollama") {
+            item { SectionLabel("API TOKEN") }
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(10.dp)) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(
+                                value = tokenInput, onValueChange = { tokenInput = it },
+                                placeholder = { Text("Paste API token here...", color = Color(0xFF484F58), fontFamily = FontFamily.Monospace, fontSize = 12.sp) },
+                                modifier = Modifier.weight(1f), singleLine = true,
+                                visualTransformation = PasswordVisualTransformation(),
+                                textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = TEXT),
+                                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CYAN, unfocusedBorderColor = BORDER, cursorColor = CYAN, focusedContainerColor = Color(0xFF010409), unfocusedContainerColor = Color(0xFF010409)),
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Button(
+                                onClick = {
+                                    if (tokenInput.isNotBlank()) {
+                                        AgentConfig.setKeyForProvider(activeProvider, tokenInput)
+                                        // Update saved list
+                                        savedTokens.removeAll { it.first == activeProvider }
+                                        savedTokens.add(0, activeProvider to tokenInput)
+                                        tokenInput = ""
+                                        Toast.makeText(context, "Token saved for ${ALL_PROVIDERS.find { it.first == activeProvider }?.second}", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                enabled = tokenInput.isNotBlank(),
+                                colors = ButtonDefaults.buttonColors(containerColor = if (tokenInput.isNotBlank()) GREEN else BORDER),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+                            ) {
+                                Text("Input", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -261,23 +245,107 @@ fun SettingsScreen(
             }
         }
 
-        // ── ABOUT ──────────────────────────────────
+        // ── SAVED TOKENS LIST ──
+        if (savedTokens.isNotEmpty()) {
+            item { SectionLabel("SAVED TOKENS") }
+            items(savedTokens) { (providerId, token) ->
+                val providerName = ALL_PROVIDERS.find { it.first == providerId }?.second ?: providerId
+                SavedTokenRow(providerName, providerId, token, context) { removedId ->
+                    AgentConfig.setKeyForProvider(removedId, "")
+                    savedTokens.removeAll { it.first == removedId }
+                }
+            }
+        }
+
+        // ── NOTIFICATIONS ──
+        item { SectionLabel("NOTIFICATIONS") }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(10.dp)) {
+                Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column {
+                        Text("Push Notifications", color = TEXT, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
+                        Text("Agent task completions & errors", color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                    }
+                    var notif by remember { mutableStateOf(AgentConfig.pushNotificationsEnabled) }
+                    Switch(checked = notif, onCheckedChange = { notif = it; AgentConfig.pushNotificationsEnabled = it },
+                        colors = SwitchDefaults.colors(checkedTrackColor = GREEN, checkedThumbColor = TEXT))
+                }
+            }
+        }
+
+        // ── UPDATES ──
+        item { SectionLabel("UPDATES") }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(10.dp)) {
+                Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("OpenClaw Android", color = TEXT, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
+                        Text("v0.9.0-alpha", color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                    }
+                    Button(
+                        onClick = {
+                            checkingUpdate = true
+                            scope.launch {
+                                kotlinx.coroutines.delay(1500)
+                                checkingUpdate = false
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/wayansuardyana-code/android-openclaw-native/releases")).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
+                            }
+                        },
+                        enabled = !checkingUpdate, colors = ButtonDefaults.buttonColors(containerColor = CYAN), shape = RoundedCornerShape(8.dp)
+                    ) {
+                        if (checkingUpdate) CircularProgressIndicator(color = TEXT, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        else { Icon(Icons.Default.SystemUpdate, null, Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text("Check Updates", fontFamily = FontFamily.Monospace, fontSize = 12.sp) }
+                    }
+                }
+            }
+        }
+
+        // ── ABOUT ──
         item { SectionLabel("ABOUT") }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(10.dp)) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    AboutRow("App", "OpenClaw Android Native")
-                    AboutRow("Version", "0.6.0-alpha")
-                    AboutRow("Bridge", "localhost:18790")
-                    AboutRow("Tools", "17 (8 device + 9 utility)")
-                    AboutRow("Database", "SQLite + Vector Search")
+                    AboutRow("Version", "0.9.0-alpha")
+                    AboutRow("Tools", "22 (8 device + 9 utility + 5 service)")
+                    AboutRow("Providers", "13")
                     AboutRow("Device", android.os.Build.MODEL)
                     AboutRow("Android", "API ${android.os.Build.VERSION.SDK_INT}")
                 }
             }
         }
-
         item { Spacer(Modifier.height(16.dp)) }
+    }
+}
+
+@Composable
+private fun SavedTokenRow(providerName: String, providerId: String, token: String, context: Context, onRemove: (String) -> Unit) {
+    var visible by remember { mutableStateOf(false) }
+    Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(providerName, color = CYAN, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                Text(
+                    if (visible) token else token.take(8) + "•".repeat(minOf(20, token.length - 8).coerceAtLeast(0)),
+                    color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace, maxLines = 1
+                )
+            }
+            // Eye toggle
+            IconButton(onClick = { visible = !visible }, modifier = Modifier.size(32.dp)) {
+                Icon(if (visible) Icons.Default.VisibilityOff else Icons.Default.Visibility, "Toggle", tint = TEXT2, modifier = Modifier.size(16.dp))
+            }
+            // Copy
+            IconButton(onClick = {
+                val clip = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clip.setPrimaryClip(ClipData.newPlainText("token", token))
+                Toast.makeText(context, "Copied!", Toast.LENGTH_SHORT).show()
+            }, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.ContentCopy, "Copy", tint = TEXT2, modifier = Modifier.size(16.dp))
+            }
+            // Delete
+            IconButton(onClick = { onRemove(providerId) }, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.Delete, "Remove", tint = Color(0xFFF85149), modifier = Modifier.size(16.dp))
+            }
+        }
     }
 }
 

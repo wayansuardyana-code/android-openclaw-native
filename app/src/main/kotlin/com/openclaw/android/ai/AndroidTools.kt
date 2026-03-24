@@ -16,7 +16,9 @@ object AndroidTools {
 
     private val gson = Gson()
 
-    fun getToolDefinitions(): List<ToolDef> = listOf(
+    fun getToolDefinitions(): List<ToolDef> = getAndroidTools() + UtilityTools.getToolDefinitions()
+
+    private fun getAndroidTools(): List<ToolDef> = listOf(
         ToolDef(
             name = "android_read_screen",
             description = "Read the current screen content. Returns a JSON accessibility tree with all visible UI elements, their text, descriptions, bounds, and interactive states.",
@@ -144,7 +146,7 @@ object AndroidTools {
                         ?: return """{"error":"Notification listener not enabled"}"""
                     listener.getActiveNotificationsJson().toString()
                 }
-                else -> """{"error":"Unknown tool: $name"}"""
+                else -> UtilityTools.executeTool(name, args)
             }
         } catch (e: Exception) {
             ServiceState.addLog("Tool error: $name — ${e.message}")

@@ -37,8 +37,14 @@ class AgentLoop(private val llmClient: LlmClient) {
         _isThinking.value = true
         ServiceState.addLog("Agent: processing message")
 
+        // Add to conversation history
+        ConversationManager.addUserMessage(userMessage)
+        ConversationManager.maybeCompact(config.provider)
+
+        // Build messages: conversation history + current tool-calling loop
+        val conversationHistory = ConversationManager.getHistory()
         val messages = mutableListOf<LlmClient.Message>()
-        messages.add(LlmClient.Message("user", userMessage))
+        messages.addAll(conversationHistory)
 
         val tools = AndroidTools.getToolDefinitions()
         var step = 0
@@ -50,6 +56,7 @@ class AgentLoop(private val llmClient: LlmClient) {
 
                 val response = llmClient.chat(config, messages, systemPrompt, tools)
                 _totalTokens.value += response.tokensUsed
+                ConversationManager.recordTokensUsed(response.tokensUsed)
 
                 if (response.error != null) {
                     ServiceState.addLog("Agent: LLM error — ${response.error}")
@@ -101,6 +108,7 @@ class AgentLoop(private val llmClient: LlmClient) {
 
                 // Plain text response — we're done
                 ServiceState.addLog("Agent: final response (${content.length} chars, ${response.tokensUsed} tokens)")
+                ConversationManager.addAssistantMessage(content)
                 NotificationHelper.notifyAgentResponse("OpenClaw", content.take(200))
                 return content
             }

@@ -198,9 +198,22 @@ ssh_execute, postgres_query (via SSH tunnel)
 - Auth: user provides OAuth2 access token (from Google Sign-In or manual)
 - Endpoints: googleapis.com/drive/v3, sheets/v4, gmail/v1, calendar/v3
 
+## Conversation Manager
+- ConversationManager: tracks full conversation history across messages
+- Token estimation: 1 token ≈ 4 chars
+- Context window limits per provider (MiniMax=80k, Anthropic=200k, Google=1M, etc.)
+- Auto-compaction at 70% of context window — summarizes old messages, keeps last 4
+- Token display in chat header: "1.2k / 80k"
+- /clear resets both chat UI and conversation history
+
+## Crash Handler
+- Thread.setDefaultUncaughtExceptionHandler writes crash to filesDir/crash_logs/
+- Crash Logs tab in Logs screen, auto-switches to it if crash detected
+- Crash report includes: time, thread, Android version, device, full stack trace
+
 ## Remaining Nice-to-Have (not blocking)
-- Chat history persistence to Room DB
 - Streaming LLM responses
 - Google Sign-In OAuth flow (currently manual token paste)
 - On-device model (Gemma 3n) — noted, not planned yet
 - MetaClaw self-learning framework — not yet implemented
+- Bootstrap.md auto-generation on first connect

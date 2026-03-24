@@ -120,7 +120,7 @@ fun ChatScreen() {
 
         // Handle slash commands locally
         when {
-            text == "/clear" -> { ChatState.clear(); return }
+            text == "/clear" -> { ChatState.clear(); com.openclaw.android.ai.ConversationManager.clear(); return }
             text == "/status" -> {
                 messages.add(ChatMessage("system", "Provider: ${AgentConfig.activeProvider}\nModel: ${config.model}\nAPI Key: ${if (hasApiKey) "Set" else "Not set"}\nTools: 17 (8 device + 9 utility)"))
                 return
@@ -200,7 +200,12 @@ ${if (customPrompt.isNotBlank()) "\n--- CUSTOM INSTRUCTIONS ---\n$customPrompt" 
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
                 Text("OpenClaw Chat", color = TEXT, fontSize = 16.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                Text("$activeProvider • ${config.model}", color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                Row {
+                    Text("$activeProvider • ${config.model}", color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                    Spacer(Modifier.width(8.dp))
+                    val tokenDisplay = com.openclaw.android.ai.ConversationManager.getContextDisplay(activeProvider)
+                    Text(tokenDisplay, color = CYAN, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                }
             }
             if (messages.isNotEmpty()) {
                 IconButton(onClick = { ChatState.clear() }) {

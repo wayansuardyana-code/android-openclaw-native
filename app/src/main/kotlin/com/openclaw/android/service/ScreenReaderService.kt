@@ -190,6 +190,24 @@ class ScreenReaderService : AccessibilityService() {
         }, null)
     }
 
+    // ── Long Press ──────────────────────────────────────
+
+    /**
+     * Long press at (x, y) for durationMs (default 600ms).
+     * Uses same GestureDescription pattern as tap() but with longer duration.
+     * Triggers context menus, copy handles, drag initiation, etc.
+     */
+    fun longPress(x: Float, y: Float, durationMs: Long = 600, callback: ((Boolean) -> Unit)? = null) {
+        val path = Path().apply { moveTo(x, y) }
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0, durationMs))
+            .build()
+        dispatchGesture(gesture, object : GestureResultCallback() {
+            override fun onCompleted(g: GestureDescription?) { callback?.invoke(true) }
+            override fun onCancelled(g: GestureDescription?) { callback?.invoke(false) }
+        }, null)
+    }
+
     // ── Swipe ───────────────────────────────────────────
 
     fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, durationMs: Long = 300, callback: ((Boolean) -> Unit)? = null) {

@@ -5,6 +5,7 @@ import com.google.gson.JsonObject
 import com.openclaw.android.service.NotificationReaderService
 import com.openclaw.android.service.ScreenReaderService
 import com.openclaw.android.util.ServiceState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
@@ -147,6 +148,74 @@ object AndroidTools {
             name = "take_screenshot",
             description = "Take a screenshot of the current screen and save it as a PNG file. Returns the file path. Requires Android 11+ (API 30) and Accessibility Service enabled. Use with send_telegram_photo to send screenshots to the user.",
             inputSchema = mapOf("type" to "object", "properties" to emptyMap<String, Any>())
+        ),
+        ToolDef(
+            name = "android_long_press",
+            description = "Long press at specific screen coordinates (x, y) for 600ms. Use for: context menus, copy/paste handles, drag initiation, app icon options, selecting text.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "x" to mapOf("type" to "number", "description" to "X coordinate"),
+                    "y" to mapOf("type" to "number", "description" to "Y coordinate"),
+                    "duration_ms" to mapOf("type" to "number", "description" to "Hold duration in milliseconds (default 600, minimum 500)")
+                ),
+                "required" to listOf("x", "y")
+            )
+        ),
+        ToolDef(
+            name = "android_scroll_to_text",
+            description = "Scroll the screen until a specific text element is visible. Tries up to 10 swipe-up gestures. Returns coordinates when found, or error if not found. Use when you know an element exists but it's off-screen.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "text" to mapOf("type" to "string", "description" to "Text to search for (case-insensitive)")
+                ),
+                "required" to listOf("text")
+            )
+        ),
+        ToolDef(
+            name = "android_set_brightness",
+            description = "Set screen brightness level (0-255) or toggle auto-brightness. Requires WRITE_SETTINGS permission (grant via Shizuku if needed).",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "level" to mapOf("type" to "number", "description" to "Brightness level 0-255 (ignored when action is auto_on/auto_off)"),
+                    "action" to mapOf("type" to "string", "description" to "One of: set (default), auto_on, auto_off",
+                        "enum" to listOf("set", "auto_on", "auto_off"))
+                )
+            )
+        ),
+        ToolDef(
+            name = "android_get_clipboard",
+            description = "Read the current text content of the device clipboard. Returns the clipboard text or empty string if nothing is copied.",
+            inputSchema = mapOf("type" to "object", "properties" to emptyMap<String, Any>())
+        ),
+        ToolDef(
+            name = "android_set_clipboard",
+            description = "Write text to the device clipboard. Use before pasting into apps.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "text" to mapOf("type" to "string", "description" to "Text to copy to clipboard")
+                ),
+                "required" to listOf("text")
+            )
+        ),
+        ToolDef(
+            name = "android_wifi_toggle",
+            description = "Open the WiFi settings panel (Android 10+ cannot toggle WiFi programmatically — opens the system WiFi panel instead). User can toggle from there, or use shizuku_command 'svc wifi enable/disable' for programmatic control.",
+            inputSchema = mapOf("type" to "object", "properties" to emptyMap<String, Any>())
+        ),
+        ToolDef(
+            name = "android_launch_url",
+            description = "Open a URL in the default browser. More reliable than opening Chrome manually and navigating. Supports http, https, and deep-link URLs.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "url" to mapOf("type" to "string", "description" to "URL to open (must include scheme, e.g. https://)")
+                ),
+                "required" to listOf("url")
+            )
         ),
     )
 
@@ -297,6 +366,126 @@ object AndroidTools {
                     val file = java.io.File(dir, "screenshot_${System.currentTimeMillis()}.png")
 
                     reader.captureScreenshot(file.absolutePath)
+                }
+                "android_long_press" -> {
+                    val reader = ScreenReaderService.instance
+                        ?: return """{"error":"Accessibility service not enabled"}"""
+                    val x = args.get("x").asFloat
+                    val y = args.get("y").asFloat
+                    val duration = args.get("duration_ms")?.asLong?.coerceAtLeast(500L) ?: 600L
+                    val success = suspendCancellableCoroutine<Boolean> { cont ->
+                        reader.longPress(x, y, duration) { result -> cont.resume(result) }
+                    }
+                    """{"success":$success,"x":$x,"y":$y,"duration_ms":$duration}"""
+                }
+                "android_scroll_to_text" -> {
+                    val reader = ScreenReaderService.instance
+                        ?: return """{"error":"Accessibility service not enabled"}"""
+                    val query = args.get("text")?.asString ?: ""
+                    var found = false
+                    var resultX = 0
+                    var resultY = 0
+                    for (attempt in 0 until 10) {
+                        val matches = reader.findElement(query)
+                        if (matches.size() > 0) {
+                            val first = matches.get(0).asJsonObject
+                            resultX = first.get("x")?.asInt ?: 0
+                            resultY = first.get("y")?.asInt ?: 0
+                            found = true
+                            break
+                        }
+                        // Swipe up to scroll down (finger moves from bottom to top)
+                        suspendCancellableCoroutine<Boolean> { cont ->
+                            reader.swipe(540f, 1600f, 540f, 600f, 300) { result -> cont.resume(result) }
+                        }
+                        kotlinx.coroutines.delay(400)
+                    }
+                    if (found) {
+                        """{"found":true,"text":"${query.replace("\"","'")}","x":$resultX,"y":$resultY}"""
+                    } else {
+                        """{"found":false,"error":"Text not found after 10 scroll attempts: ${query.replace("\"","'")}"}"""
+                    }
+                }
+                "android_set_brightness" -> {
+                    val context = com.openclaw.android.OpenClawApplication.instance
+                    val action = args.get("action")?.asString ?: "set"
+                    try {
+                        when (action) {
+                            "auto_on" -> {
+                                android.provider.Settings.System.putInt(
+                                    context.contentResolver,
+                                    android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE,
+                                    android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC
+                                )
+                                """{"success":true,"action":"auto_on"}"""
+                            }
+                            "auto_off" -> {
+                                android.provider.Settings.System.putInt(
+                                    context.contentResolver,
+                                    android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE,
+                                    android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL
+                                )
+                                """{"success":true,"action":"auto_off"}"""
+                            }
+                            else -> {
+                                val level = args.get("level")?.asInt?.coerceIn(0, 255) ?: 128
+                                // Disable auto-brightness first so manual level takes effect
+                                android.provider.Settings.System.putInt(
+                                    context.contentResolver,
+                                    android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE,
+                                    android.provider.Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL
+                                )
+                                android.provider.Settings.System.putInt(
+                                    context.contentResolver,
+                                    android.provider.Settings.System.SCREEN_BRIGHTNESS,
+                                    level
+                                )
+                                """{"success":true,"action":"set","level":$level}"""
+                            }
+                        }
+                    } catch (se: SecurityException) {
+                        """{"error":"WRITE_SETTINGS permission denied. Grant via: shizuku_command 'pm grant com.openclaw.android android.permission.WRITE_SETTINGS'"}"""
+                    }
+                }
+                "android_get_clipboard" -> {
+                    val context = com.openclaw.android.OpenClawApplication.instance
+                    val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    val text = cm.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString() ?: ""
+                    """{"text":${com.google.gson.Gson().toJson(text)}}"""
+                }
+                "android_set_clipboard" -> {
+                    val context = com.openclaw.android.OpenClawApplication.instance
+                    val text = args.get("text")?.asString ?: ""
+                    val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    val clip = android.content.ClipData.newPlainText("openclaw", text)
+                    cm.setPrimaryClip(clip)
+                    """{"success":true,"length":${text.length}}"""
+                }
+                "android_wifi_toggle" -> {
+                    val context = com.openclaw.android.OpenClawApplication.instance
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                        val intent = android.content.Intent(android.provider.Settings.Panel.ACTION_WIFI)
+                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(intent)
+                        """{"success":true,"note":"Opened WiFi settings panel (Android 10+ restriction). Use shizuku_command 'svc wifi enable' or 'svc wifi disable' for direct control."}"""
+                    } else {
+                        // Pre-Android 10: toggle via WifiManager
+                        @Suppress("DEPRECATION")
+                        val wm = context.getSystemService(android.content.Context.WIFI_SERVICE) as android.net.wifi.WifiManager
+                        @Suppress("DEPRECATION")
+                        val current = wm.isWifiEnabled
+                        @Suppress("DEPRECATION")
+                        wm.isWifiEnabled = !current
+                        """{"success":true,"wifi_enabled":${!current}}"""
+                    }
+                }
+                "android_launch_url" -> {
+                    val context = com.openclaw.android.OpenClawApplication.instance
+                    val url = args.get("url")?.asString ?: ""
+                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                    intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(intent)
+                    """{"success":true,"url":${com.google.gson.Gson().toJson(url)}}"""
                 }
                 else -> {
                     val utilResult = UtilityTools.executeTool(name, args)

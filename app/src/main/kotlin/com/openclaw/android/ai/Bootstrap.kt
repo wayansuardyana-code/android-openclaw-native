@@ -294,6 +294,60 @@ Do this AUTOMATICALLY whenever you learn:
 - Settings: com.android.settings
 - Camera: (varies by device)
 - File Manager: (varies by device)
+
+## App Interaction Patterns (how to use primitives in real apps)
+
+### General Pattern (works for ANY app)
+1. android_open_app(pkg) → open the app
+2. find_element("target") → find what you need (CHEAP, use first)
+3. If not found: android_read_screen → get full layout, find coordinates
+4. android_tap(x, y) → tap buttons, links, items
+5. android_type_text(text) → type in focused input
+6. android_press_enter → submit search/form
+7. android_swipe → scroll if needed
+8. Repeat 2-6 until task done
+
+### WhatsApp (com.whatsapp)
+- Send message: open → find_element("Search") → tap → type contact name → tap contact → find_element("Type a message") → tap → type_text → press_enter
+- Read last chat: open → find_element(contact_name) → tap → read_screen (messages visible in list)
+- Send image: open chat → find_element("Attach") or find_element("+") → tap → find_element("Gallery") → tap → select image
+
+### Instagram (com.instagram.android)
+- Check DMs: open → find_element("Direct") or tap messenger icon (top right) → read_screen
+- View stories: open → tap profile pic at top → read_screen/take_screenshot
+- Search user: open → find_element("Search") → tap → type_text(username) → tap result
+- Post interaction: find_element("Like") → tap, find_element("Comment") → tap → type_text
+
+### Chrome (com.android.chrome)
+- Open URL: android_launch_url(url) — no need to open Chrome manually!
+- Search: open → find_element("Search or type URL") → tap → type_text(query) → press_enter
+- Read page: read_screen → get visible text, swipe to scroll for more
+
+### YouTube (com.google.android.youtube)
+- Search & play: open → find_element("Search") → tap → type_text(query) → press_enter → find_element(video_title) → tap
+- Pause/play: android_media_control("pause") — DON'T try to tap the pause button!
+- Volume: android_volume("up"/"down") — use system control, not in-app slider
+- Next video: android_media_control("next") or swipe up on video
+
+### Gmail (com.google.android.gm)
+- Read inbox: open → read_screen (inbox visible) → tap email to open
+- Compose: open → find_element("Compose") → tap → type_text in fields
+- Search: find_element("Search in emails") → tap → type_text(query) → press_enter
+
+### Settings (com.android.settings)
+- Navigate: open → find_element("WiFi"/"Bluetooth"/"Display"/etc) → tap
+- Toggle: find_element("switch"/"toggle") near setting name → tap
+- If not visible: android_scroll_to_text("setting_name") → tap
+
+### Tips for Smooth Interaction
+- ALWAYS use find_element FIRST before read_screen (cheaper, faster)
+- Use android_media_control for play/pause — never tap video player buttons
+- Use android_volume for volume — never try to drag volume sliders
+- Use android_launch_url for web links — don't manually navigate Chrome
+- Use android_long_press for context menus (copy, share, delete)
+- If an element isn't found, try scrolling: android_swipe(540, 1500, 540, 500) to scroll down
+- YouTube/Spotify controls: ALWAYS use media_control, not UI taps
+- After typing, ALWAYS press_enter to submit (don't try to tap "Search" button)
 """
 
     private val HEARTBEAT_MD = """# HEARTBEAT.md — Periodic Self-Check

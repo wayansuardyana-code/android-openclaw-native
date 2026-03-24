@@ -1,13 +1,9 @@
 package com.openclaw.android.ui.screens
 
-import android.app.Activity
-import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
@@ -76,7 +72,6 @@ fun ChatScreen() {
     val messages = remember { mutableStateListOf<ChatMessage>() }
     var input by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
-    var showSlashMenu by remember { mutableStateOf(false) }
     var attachedFile by remember { mutableStateOf<Pair<String, String>?>(null) } // (name, content)
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -84,11 +79,10 @@ fun ChatScreen() {
     val agentLoop = remember { AgentLoop(llmClient) }
     val context = LocalContext.current
 
-    // Fix #2: cleanup LlmClient on dispose
-    DisposableEffect(Unit) { onDispose { llmClient.close() } }
-
-    val config = AgentConfig.toLlmConfig()
-    val hasApiKey = AgentConfig.getKeyForProvider(AgentConfig.activeProvider).isNotBlank() || AgentConfig.activeProvider == "ollama"
+    // Cache config to avoid SharedPrefs reads during recomposition
+    val config = remember { AgentConfig.toLlmConfig() }
+    val activeProvider = remember { AgentConfig.activeProvider }
+    val hasApiKey = remember { AgentConfig.getKeyForProvider(activeProvider).isNotBlank() || activeProvider == "ollama" }
 
     // File picker
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
@@ -108,10 +102,8 @@ fun ChatScreen() {
         }
     }
 
-    // Slash command detection
-    LaunchedEffect(input) {
-        showSlashMenu = input.startsWith("/") && !input.contains(" ")
-    }
+    // Slash menu: derive from input state directly (no LaunchedEffect)
+    val showSlashMenu = input.startsWith("/") && !input.contains(" ") && input.length < 15
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1)
@@ -202,7 +194,7 @@ ${if (customPrompt.isNotBlank()) "\n--- CUSTOM INSTRUCTIONS ---\n$customPrompt" 
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
                 Text("OpenClaw Chat", color = TEXT, fontSize = 16.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                Text("${AgentConfig.activeProvider} • ${config.model}", color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                Text("$activeProvider • ${config.model}", color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
             }
             if (messages.isNotEmpty()) {
                 IconButton(onClick = { messages.clear() }) {
@@ -259,20 +251,19 @@ ${if (customPrompt.isNotBlank()) "\n--- CUSTOM INSTRUCTIONS ---\n$customPrompt" 
             }
         }
 
-        // Slash command menu
-        AnimatedVisibility(visible = showSlashMenu && input.startsWith("/")) {
+        // Slash command menu (simple if, no animation)
+        if (showSlashMenu) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = Color(0xFF1C2333)),
                 shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                LazyColumn(modifier = Modifier.heightIn(max = 200.dp).padding(8.dp)) {
+                Column(modifier = Modifier.heightIn(max = 200.dp).verticalScroll(rememberScrollState()).padding(8.dp)) {
                     val filtered = SLASH_COMMANDS.filter { it.first.startsWith(input) || input == "/" }
-                    items(filtered) { (cmd, desc) ->
+                    filtered.forEach { (cmd, desc) ->
                         Row(
                             modifier = Modifier.fillMaxWidth().clickable {
-                                input = if (cmd.endsWith(" ")) cmd else cmd
-                                showSlashMenu = false
+                                input = cmd
                                 if (!cmd.endsWith(" ")) sendMessage(cmd)
                             }.padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {

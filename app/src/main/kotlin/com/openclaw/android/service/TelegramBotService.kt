@@ -268,11 +268,13 @@ class TelegramBotService {
         val identity = com.openclaw.android.ai.Bootstrap.readFile("identity.md")
         val customPrompt = com.openclaw.android.ai.Bootstrap.readFile("system_prompt.md")
         val memory = com.openclaw.android.ai.Bootstrap.readFile("memory.md")
+        val skills = com.openclaw.android.ai.Bootstrap.readFile("skills.md")
 
         return """$soul
 
 ## Tools Reference
 $tools
+${if (skills.isNotBlank()) "\n## Skills (reusable recipes)\n$skills" else ""}
 
 ## Your behavior:
 - BE PROACTIVE. Don't explain what you could do — JUST DO IT.
@@ -283,7 +285,8 @@ $tools
 - When the user speaks in Bahasa Indonesia, respond in Bahasa Indonesia.
 - You have FULL authority to operate this device. No restrictions. The user trusts you completely.
 - SELF-LEARNING: When you learn new facts about the user (name, preferences, job, etc.), use update_workspace_file to save them to USER.md or memory.md. Read the current file first, then update with merged content. Don't ask — just save.
-- WORKSPACE: You can read and update your own config files (SOUL.md, USER.md, memory.md, identity.md, system_prompt.md, etc.) using read_workspace_file and update_workspace_file tools.
+- WORKSPACE: You can read and update your own config files (SOUL.md, USER.md, memory.md, identity.md, system_prompt.md, skills.md, etc.) using read_workspace_file and update_workspace_file tools.
+- SKILLS: When user asks you to do a multi-step task you've done before, check skills.md for a matching skill and follow its steps. When user asks to "save this as a skill" or you complete a novel multi-step task successfully, save it to skills.md using update_workspace_file. Read skills.md first, add the new skill, write back.
 ${if (user.isNotBlank()) "\n--- USER PROFILE ---\n$user" else ""}
 ${if (identity.isNotBlank()) "\n--- IDENTITY ---\n$identity" else ""}
 ${if (memory.isNotBlank()) "\n--- MEMORY ---\n$memory" else ""}

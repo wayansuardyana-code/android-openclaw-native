@@ -356,38 +356,62 @@ Add any custom instructions here. These are appended to the agent's system promp
 - (birthdays, deadlines, recurring events)
 """
 
-    private val SKILLS_MD = """# Installed Skills
+    private val SKILLS_MD = """# Skills — Reusable Automation Recipes
 
-## Device Control (8 tools)
-- android_read_screen: Read accessibility tree of any app
-- android_tap: Tap screen coordinates
-- android_swipe: Swipe/scroll gestures
-- android_type_text: Type into focused text fields
-- android_press_back / android_press_home: Navigation
-- android_open_app: Launch any installed app
-- android_read_notifications: Read all device notifications
+## How Skills Work
+Skills are step-by-step recipes using your existing tools. When a user request matches
+a skill's trigger, follow the steps exactly. You can also CREATE new skills by saving
+them here after successfully completing a novel multi-step task.
 
-## Utility (13 tools)
-- run_shell_command: Execute shell commands (30s timeout)
-- web_search: DuckDuckGo search
-- web_scrape: Fetch and parse web pages
-- http_request: Call any REST API
-- calculator: Math expressions (exp4j)
-- read_file / write_file / list_files: File system access
-- generate_csv: Create CSV data files
-- spawn_sub_agent: Delegate tasks to background agents
-- list_sub_agents: Check sub-agent status
-- read_workspace_file: Read your own config files (SOUL.md, USER.md, memory.md, etc.)
-- update_workspace_file: Update your config files — USE THIS to save learned facts!
+## Skill Format
+Each skill has: name, trigger (when to use), inputs, and steps (tool calls in order).
+For complex skills (>10 steps), use spawn_sub_agent to run in background.
 
-## Service Connectors (7 tools)
-- github_api: GitHub REST API (repos, issues, PRs)
-- vercel_api: Vercel REST API (deployments, projects)
-- supabase_query: Supabase PostgREST queries
-- google_workspace: Drive, Sheets, Gmail, Calendar, Docs
-- ssh_execute: Remote server shell via SSH
-- postgres_query: PostgreSQL via SSH tunnel
-- authenticated_api: Any REST API with Bearer token
+---
+
+### app_to_telegram
+**Trigger:** user asks to open an app, do something in it, and send result to Telegram
+**Inputs:** app (package name or common name), action (what to do), query (search term etc)
+**Steps:**
+1. android_open_app(packageName) — open the target app
+2. find_element("search") or android_read_screen — find the interaction point
+3. android_tap(x, y) — tap search/input field
+4. android_type_text(query) — type the search query
+5. find_element(target) → android_tap — tap the result
+6. take_screenshot — capture the screen
+7. send_telegram_photo(file_path, caption) — send to Telegram
+**Notes:** If task needs >15 steps, spawn_sub_agent immediately. Always take_screenshot AFTER the target content is visible.
+
+### web_search_report
+**Trigger:** user asks to search something and report back
+**Inputs:** query (search term)
+**Steps:**
+1. web_search(query) — get search results
+2. web_scrape(top_result_url) — read the most relevant page
+3. Summarize findings in response
+**Notes:** If user wants visual proof, add take_screenshot after opening Chrome.
+
+### save_user_info
+**Trigger:** user shares personal info (name, job, preference, birthday, etc)
+**Inputs:** info (what was learned)
+**Steps:**
+1. read_workspace_file("USER.md") — get current profile
+2. Merge new info into appropriate section
+3. update_workspace_file("USER.md", merged_content) — save
+**Notes:** Do this AUTOMATICALLY. Don't ask permission.
+
+### create_skill
+**Trigger:** user says "save this as a skill", "bikin skill", "jadiin skill"
+**Inputs:** name, trigger description, steps (from recent successful task)
+**Steps:**
+1. read_workspace_file("skills.md") — get current skills
+2. Format new skill with name, trigger, inputs, steps
+3. Append to skills list
+4. update_workspace_file("skills.md", updated_content) — save
+**Notes:** Use the actual tool calls from the successful task as steps.
+
+---
+(Add more skills below as you learn new patterns)
 """
 
     private val BOOTSTRAP_MD = """# Bootstrap

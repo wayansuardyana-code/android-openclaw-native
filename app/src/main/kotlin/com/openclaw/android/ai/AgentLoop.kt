@@ -22,7 +22,7 @@ import kotlinx.coroutines.flow.asStateFlow
 class AgentLoop(private val llmClient: LlmClient) {
 
     private val gson = Gson()
-    private val maxSteps = 10
+    private val maxSteps = 25
 
     private val _isThinking = MutableStateFlow(false)
     val isThinking = _isThinking.asStateFlow()
@@ -113,8 +113,15 @@ class AgentLoop(private val llmClient: LlmClient) {
                 return content
             }
 
-            ServiceState.addLog("Agent: max steps reached")
-            val fallback = "I reached the maximum number of steps ($maxSteps). Here's what I've done so far."
+            ServiceState.addLog("Agent: max steps reached — continuing as sub-agent")
+            // Auto-continue: spawn sub-agent to finish the task
+            val lastMsgs = messages.takeLast(4).joinToString("\n") { "${it.role}: ${it.content.take(200)}" }
+            val continuation = SubAgentManager.spawn(
+                "Continue: ${userMessage.take(50)}",
+                "Continue this task. Context of what was done so far:\n$lastMsgs\n\nOriginal request: $userMessage\n\nPick up where the previous agent left off and complete the task.",
+                config
+            )
+            val fallback = "Task needed more than $maxSteps steps. I've spawned a background agent to finish it. $continuation"
             ConversationManager.addAssistantMessage(fallback)
             return fallback
         } finally {

@@ -31,19 +31,22 @@ private val BORDER = Color(0xFF30363D)
 private val CYAN = Color(0xFF58A6FF)
 private val GREEN = Color(0xFF3FB950)
 private val RED = Color(0xFFF85149)
+private val ORANGE = Color(0xFFD29922)
 private val TEXT = Color(0xFFF0F6FC)
 private val TEXT2 = Color(0xFF8B949E)
 
 @Composable
 fun LogScreen() {
-    var activeTab by remember { mutableStateOf("logs") }
+    // Auto-switch to Crashes tab if there's a recent crash
+    val hasCrash = remember { com.openclaw.android.OpenClawApplication.instance.getLatestCrashLog() != null }
+    var activeTab by remember { mutableStateOf(if (hasCrash) "crashes" else "logs") }
 
     Column(modifier = Modifier.fillMaxSize().background(BG)) {
         Row(
             modifier = Modifier.fillMaxWidth().background(SURFACE).padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            listOf("logs" to "Logs", "terminal" to "Terminal").forEach { (id, label) ->
+            listOf("logs" to "Logs", "terminal" to "Terminal", "crashes" to "Crashes").forEach { (id, label) ->
                 val selected = activeTab == id
                 OutlinedButton(
                     onClick = { activeTab = id },
@@ -64,6 +67,7 @@ fun LogScreen() {
         when (activeTab) {
             "logs" -> LogsTab()
             "terminal" -> TerminalTab()
+            "crashes" -> CrashLogsTab()
         }
     }
 }
@@ -193,6 +197,71 @@ fun TerminalTab() {
                     result.first.lines().forEach { line -> output.add(line to color) }
                 }
             }) { Icon(Icons.Default.Send, "Run", tint = CYAN, modifier = Modifier.size(20.dp)) }
+        }
+    }
+}
+
+@Composable
+fun CrashLogsTab() {
+    val app = com.openclaw.android.OpenClawApplication.instance
+    val latestCrash = remember { app.getLatestCrashLog() }
+    val allCrashes = remember { app.getCrashLogs() }
+    val clipboard = LocalClipboardManager.current
+
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("Crash Logs", color = TEXT, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+            Row {
+                if (latestCrash != null) {
+                    IconButton(onClick = { clipboard.setText(AnnotatedString(latestCrash)) }) {
+                        Icon(Icons.Default.ContentCopy, "Copy", tint = TEXT2, modifier = Modifier.size(20.dp))
+                    }
+                }
+                IconButton(onClick = { app.clearCrashLogs() }) {
+                    Icon(Icons.Default.Delete, "Clear", tint = TEXT2, modifier = Modifier.size(20.dp))
+                }
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        if (latestCrash == null && allCrashes.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.CheckCircle, null, tint = GREEN, modifier = Modifier.size(48.dp))
+                    Spacer(Modifier.height(8.dp))
+                    Text("No crashes recorded", color = GREEN, fontFamily = FontFamily.Monospace, fontSize = 14.sp)
+                    Text("App is running stable", color = TEXT2, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                }
+            }
+        } else {
+            // Show latest crash prominently
+            if (latestCrash != null) {
+                Text("LATEST CRASH", color = RED, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, letterSpacing = 1.sp)
+                Spacer(Modifier.height(4.dp))
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF010409)),
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, RED.copy(alpha = 0.3f)),
+                    modifier = Modifier.fillMaxWidth().weight(1f)
+                ) {
+                    SelectionContainer {
+                        LazyColumn(modifier = Modifier.padding(8.dp)) {
+                            items(latestCrash.lines()) { line ->
+                                val color = when {
+                                    line.contains("===") -> CYAN
+                                    line.contains("at ") -> Color(0xFF8B949E)
+                                    line.contains("Caused by") -> RED
+                                    line.contains("Exception") || line.contains("Error") -> RED
+                                    line.startsWith("Time:") || line.startsWith("Device:") || line.startsWith("Android:") -> ORANGE
+                                    else -> Color(0xFFC9D1D9)
+                                }
+                                Text(line, color = color, fontFamily = FontFamily.Monospace, fontSize = 10.sp, lineHeight = 14.sp)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

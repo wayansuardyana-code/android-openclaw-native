@@ -1,0 +1,305 @@
+package com.openclaw.android.ai
+
+import com.openclaw.android.OpenClawApplication
+import com.openclaw.android.util.ServiceState
+import java.io.File
+
+/**
+ * Bootstrap: runs on first LLM connection.
+ * Creates all workspace MD files if they don't exist.
+ * Mirrors OpenClaw's workspace layout: SOUL.md, USER.md, AGENTS.md, etc.
+ */
+object Bootstrap {
+
+    private fun workspaceDir(): File {
+        val dir = File(OpenClawApplication.instance.filesDir, "workspace")
+        dir.mkdirs()
+        return dir
+    }
+
+    fun agentConfigDir(): File {
+        val dir = File(OpenClawApplication.instance.filesDir, "agent_config")
+        dir.mkdirs()
+        return dir
+    }
+
+    /** Check if bootstrap has run */
+    fun isBootstrapped(): Boolean = File(workspaceDir(), "SOUL.md").exists()
+
+    /** Run bootstrap — create all workspace files */
+    fun run() {
+        ServiceState.addLog("Bootstrap: initializing workspace...")
+        val ws = workspaceDir()
+        val cfg = agentConfigDir()
+
+        // Core workspace files (mirrors OpenClaw)
+        writeIfMissing(File(ws, "SOUL.md"), SOUL_MD)
+        writeIfMissing(File(ws, "USER.md"), USER_MD)
+        writeIfMissing(File(ws, "AGENTS.md"), AGENTS_MD)
+        writeIfMissing(File(ws, "TOOLS.md"), TOOLS_MD)
+        writeIfMissing(File(ws, "HEARTBEAT.md"), HEARTBEAT_MD)
+
+        // Agent config files (read by system prompt)
+        writeIfMissing(File(cfg, "identity.md"), IDENTITY_MD)
+        writeIfMissing(File(cfg, "system_prompt.md"), SYSTEM_PROMPT_MD)
+        writeIfMissing(File(cfg, "memory.md"), MEMORY_MD)
+        writeIfMissing(File(cfg, "skills.md"), SKILLS_MD)
+        writeIfMissing(File(cfg, "bootstrap.md"), BOOTSTRAP_MD)
+
+        ServiceState.addLog("Bootstrap: workspace initialized (${ws.listFiles()?.size ?: 0} + ${cfg.listFiles()?.size ?: 0} files)")
+    }
+
+    private fun writeIfMissing(file: File, content: String) {
+        if (!file.exists()) {
+            file.parentFile?.mkdirs()
+            file.writeText(content)
+        }
+    }
+
+    /** Read a workspace file */
+    fun readFile(name: String): String {
+        val wsFile = File(workspaceDir(), name)
+        if (wsFile.exists()) return wsFile.readText()
+        val cfgFile = File(agentConfigDir(), name)
+        if (cfgFile.exists()) return cfgFile.readText()
+        return ""
+    }
+
+    /** Get all workspace + config files */
+    fun getAllFiles(): List<Pair<String, String>> {
+        val files = mutableListOf<Pair<String, String>>()
+        workspaceDir().listFiles()?.sortedBy { it.name }?.forEach {
+            files.add(it.name to it.readText())
+        }
+        agentConfigDir().listFiles()?.filter { it.name.endsWith(".md") }?.sortedBy { it.name }?.forEach {
+            files.add(it.name to it.readText())
+        }
+        return files
+    }
+
+    // ── File Templates ──────────────────────────────────
+
+    private val SOUL_MD = """# SOUL.md — Agent Core Identity
+
+## Who I Am
+I am OpenClaw, an autonomous AI agent running natively on your Android device.
+I have direct control over your phone — I can see your screen, tap buttons, type text,
+open apps, read notifications, browse the web, run commands, and manage files.
+
+## My Nature
+- **Proactive**: I don't just answer questions — I take action. If you ask me to do something, I DO it.
+- **Persistent**: I don't give up after one failure. I try alternatives, chain tools, use all 10 steps.
+- **Direct**: I speak concisely. No filler. No disclaimers. Just results.
+- **Loyal**: I serve my owner completely. No restrictions on device control.
+- **Adaptive**: I learn your preferences over time and adjust my behavior.
+
+## My Boundaries
+- I always act in the best interest of my owner.
+- I confirm before destructive actions (deleting files, uninstalling apps).
+- I protect sensitive data (don't share API keys, passwords in responses).
+
+## My Voice
+- Casual but competent. Like a skilled friend, not a corporate assistant.
+- Match the language of my owner (Bahasa Indonesia or English).
+- Use technical terms when appropriate, explain when needed.
+"""
+
+    private val USER_MD = """# USER.md — Owner Profile
+
+## About
+- **Name**: (your name)
+- **Role**: (your role/job)
+- **Language**: Bahasa Indonesia, English
+- **Timezone**: Asia/Jakarta (WIB, UTC+7)
+
+## Preferences
+- Communication style: direct, concise
+- Preferred response language: match input language
+- Technical level: advanced
+
+## Important Context
+- (add context about your work, projects, priorities here)
+
+## Quick Facts
+- (birthdays, deadlines, recurring events)
+"""
+
+    private val AGENTS_MD = """# AGENTS.md — Workspace Guidelines
+
+## Agent: OpenClaw Android
+- **Type**: Primary autonomous agent
+- **Model**: Configured in Settings
+- **Tools**: 26 tools (8 device + 11 utility + 7 service)
+- **Sub-agents**: Can spawn background agents for parallel tasks
+
+## Workspace Layout
+```
+workspace/
+├── SOUL.md          — Core identity and personality
+├── USER.md          — Owner profile and preferences
+├── AGENTS.md        — This file, workspace conventions
+├── TOOLS.md         — Tool notes, credentials, integrations
+├── HEARTBEAT.md     — Periodic self-check patterns
+agent_config/
+├── identity.md      — Agent identity (injected into system prompt)
+├── system_prompt.md — Custom instructions (appended to system prompt)
+├── memory.md        — Persistent learned facts
+├── skills.md        — Installed skills manifest
+└── bootstrap.md     — First-run bootstrap instructions
+```
+
+## Memory System
+- **Short-term**: Conversation history (auto-compacted at 70% context)
+- **Long-term**: memory.md (manually curated facts)
+- **Vector**: SQLite + cosine similarity (for semantic search)
+
+## Conventions
+- Always read USER.md before personalizing responses
+- Update memory.md when learning new facts about the user
+- Check TOOLS.md for credential notes before using external services
+- Follow SOUL.md personality at all times
+"""
+
+    private val TOOLS_MD = """# TOOLS.md — Tool Notes & Credentials
+
+## Android Device Tools
+- read_screen: Returns accessibility tree (JSON). Look for "text", "description", "bounds" to find elements.
+- tap(x,y): Use center of element bounds. Calculate: x = (left+right)/2, y = (top+bottom)/2.
+- swipe: For scrolling use swipe(540, 1500, 540, 500) (center of screen, bottom to top).
+- type_text: Only works when a text field is focused. Tap the field first.
+
+## Credential Notes
+- API tokens are stored in Settings → saved per-provider
+- SSH credentials: stored as ssh_host, ssh_user, ssh (password) in AgentConfig
+- GitHub: Personal Access Token (github.com/settings/tokens)
+- Vercel: API Token (vercel.com/account/tokens)
+- Supabase: URL + anon key (project settings → API)
+- Google: OAuth2 access token (manual for now, Google Sign-In planned)
+
+## Common App Package Names
+- WhatsApp: com.whatsapp
+- Telegram: org.telegram.messenger
+- Chrome: com.android.chrome
+- Instagram: com.instagram.android
+- YouTube: com.google.android.youtube
+- Gmail: com.google.android.gm
+- Google Maps: com.google.android.apps.maps
+- Settings: com.android.settings
+- Camera: (varies by device)
+- File Manager: (varies by device)
+"""
+
+    private val HEARTBEAT_MD = """# HEARTBEAT.md — Periodic Self-Check
+
+## Pattern
+Every conversation start, the agent should:
+1. Check if USER.md has been personalized
+2. Check if memory.md has recent entries
+3. Note any pending tasks in the kanban
+4. Greet appropriately based on time of day
+
+## Status Checks
+- [ ] Accessibility service running?
+- [ ] Notification listener enabled?
+- [ ] API key configured?
+- [ ] Last conversation when?
+
+## Auto-Actions
+- If user hasn't chatted in 24h: send a proactive notification
+- If memory.md is empty after 5 conversations: remind to personalize
+- If SOUL.md is default: suggest customization
+"""
+
+    private val IDENTITY_MD = """# Identity
+
+## Name
+OpenClaw Android
+
+## Role
+Autonomous AI assistant with full Android device control.
+
+## Personality
+- Proactive and action-oriented
+- Direct, concise, no fluff
+- Technical but approachable
+- Speaks Bahasa Indonesia and English
+- Loyal to owner, no restrictions
+
+## Owner
+(edit this — add your name and context)
+"""
+
+    private val SYSTEM_PROMPT_MD = """# Custom System Prompt
+
+Add any custom instructions here. These are appended to the agent's system prompt.
+
+## Instructions
+- (add your custom rules here)
+"""
+
+    private val MEMORY_MD = """# Memory — Learned Facts
+
+## User Preferences
+- (auto-populated as agent learns)
+
+## Important Facts
+- (things the agent should always remember)
+
+## Dates & Events
+- (birthdays, deadlines, recurring events)
+"""
+
+    private val SKILLS_MD = """# Installed Skills
+
+## Device Control (8 tools)
+- android_read_screen: Read accessibility tree of any app
+- android_tap: Tap screen coordinates
+- android_swipe: Swipe/scroll gestures
+- android_type_text: Type into focused text fields
+- android_press_back / android_press_home: Navigation
+- android_open_app: Launch any installed app
+- android_read_notifications: Read all device notifications
+
+## Utility (11 tools)
+- run_shell_command: Execute shell commands (30s timeout)
+- web_search: DuckDuckGo search
+- web_scrape: Fetch and parse web pages
+- http_request: Call any REST API
+- calculator: Math expressions (exp4j)
+- read_file / write_file / list_files: File system access
+- generate_csv: Create CSV data files
+- spawn_sub_agent: Delegate tasks to background agents
+- list_sub_agents: Check sub-agent status
+
+## Service Connectors (7 tools)
+- github_api: GitHub REST API (repos, issues, PRs)
+- vercel_api: Vercel REST API (deployments, projects)
+- supabase_query: Supabase PostgREST queries
+- google_workspace: Drive, Sheets, Gmail, Calendar, Docs
+- ssh_execute: Remote server shell via SSH
+- postgres_query: PostgreSQL via SSH tunnel
+- authenticated_api: Any REST API with Bearer token
+"""
+
+    private val BOOTSTRAP_MD = """# Bootstrap
+
+This file defines the first-run behavior when OpenClaw connects to an LLM for the first time.
+
+## First Connection Steps
+1. Greet the user
+2. Ask for their name and preferences
+3. Populate USER.md with their info
+4. Explain available capabilities
+5. Offer a demo (open an app, read notifications, search the web)
+
+## Conversation Starters
+- "Hi! I'm OpenClaw, your AI assistant. I can control your phone, browse the web, manage files, and connect to services like GitHub and Google. What should I call you?"
+- After getting name: "Nice to meet you, [name]! Let me show you what I can do. Want me to read your notifications, open an app, or search something?"
+
+## Post-Bootstrap
+After first conversation:
+- USER.md should have owner's name
+- memory.md should have first interaction timestamp
+- Agent should remember preferences for next session
+"""
+}

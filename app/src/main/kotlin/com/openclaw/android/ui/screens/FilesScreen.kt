@@ -28,77 +28,37 @@ private val TEXT2 = Color(0xFF8B949E)
 
 data class MdFile(val name: String, val description: String, val defaultContent: String)
 
-private val defaultFiles = listOf(
-    MdFile("identity.md", "Agent identity & personality", """# Identity
-
-## Name
-OpenClaw Android
-
-## Role
-Personal AI assistant with full Android device control.
-
-## Personality
-- Direct and efficient
-- Technical but approachable
-- Proactive — suggest actions, don't just answer
-
-## Owner
-(your name here)
-
-## Context
-Running on Android device with accessibility, notification, and system control.
-"""),
-    MdFile("memory.md", "Persistent memory & learned facts", """# Memory
-
-## Learned Facts
-- (facts the agent learns over time)
-
-## User Preferences
-- (preferences discovered through interaction)
-
-## Important Dates
-- (birthdays, deadlines, events)
-"""),
-    MdFile("system_prompt.md", "Custom system prompt additions", """# System Prompt Additions
-
-Add custom instructions that get appended to the agent's system prompt.
-
-## Custom Instructions
--
-"""),
-    MdFile("skills.md", "Installed skills manifest", """# Installed Skills
-
-## Active Skills
-- file_generation: Generate XLSX, CSV, PDF files
-- web_scrape: Fetch and parse web pages
-- calculator: Math expressions and statistics
-- android_control: Full device control via accessibility
-- shell: Execute shell commands
-- web_search: DuckDuckGo search
-- http_request: Call any API
-
-## Pending
-- (skills waiting to be installed)
-"""),
+// Files are now loaded dynamically from Bootstrap workspace
+private val fileDescriptions = mapOf(
+    "SOUL.md" to "Core personality & identity (who the agent IS)",
+    "USER.md" to "Owner profile & preferences",
+    "AGENTS.md" to "Workspace conventions & layout",
+    "TOOLS.md" to "Tool notes, credentials, app packages",
+    "HEARTBEAT.md" to "Periodic self-check patterns",
+    "identity.md" to "Agent identity (injected into prompt)",
+    "system_prompt.md" to "Custom instructions (appended to prompt)",
+    "memory.md" to "Persistent learned facts",
+    "skills.md" to "Installed skills manifest",
+    "bootstrap.md" to "First-run bootstrap behavior",
 )
 
 @Composable
 fun FilesScreen() {
     val context = LocalContext.current
-    val filesDir = remember { File(context.filesDir, "agent_config") }
-    var selectedFile by remember { mutableStateOf<MdFile?>(null) }
+    var selectedFileName by remember { mutableStateOf<String?>(null) }
     var editContent by remember { mutableStateOf("") }
     var isDirty by remember { mutableStateOf(false) }
     var saveMessage by remember { mutableStateOf<String?>(null) }
 
-    // Ensure directory exists
-    LaunchedEffect(Unit) { filesDir.mkdirs() }
-
-    // Load file content when selected
-    fun loadFileContent(file: MdFile): String {
-        val diskFile = File(filesDir, file.name)
-        return if (diskFile.exists()) diskFile.readText() else file.defaultContent
+    // Bootstrap workspace if needed
+    LaunchedEffect(Unit) {
+        if (!com.openclaw.android.ai.Bootstrap.isBootstrapped()) {
+            com.openclaw.android.ai.Bootstrap.run()
+        }
     }
+
+    // Get all files from workspace
+    val allFiles = remember { com.openclaw.android.ai.Bootstrap.getAllFiles() }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(BG).padding(horizontal = 16.dp),
@@ -111,15 +71,16 @@ fun FilesScreen() {
             Spacer(Modifier.height(8.dp))
         }
 
-        items(defaultFiles) { file ->
-            val isSelected = selectedFile?.name == file.name
+        items(allFiles) { (name, _) ->
+            val isSelected = selectedFileName == name
+            val desc = fileDescriptions[name] ?: "Workspace file"
             Card(
                 colors = CardDefaults.cardColors(containerColor = if (isSelected) Color(0xFF1C2333) else SURFACE),
                 shape = RoundedCornerShape(10.dp),
                 border = if (isSelected) BorderStroke(1.dp, CYAN) else null,
                 modifier = Modifier.fillMaxWidth().clickable {
-                    selectedFile = file
-                    editContent = loadFileContent(file)
+                    selectedFileName = name
+                    editContent = com.openclaw.android.ai.Bootstrap.readFile(name)
                     isDirty = false
                     saveMessage = null
                 }
@@ -128,8 +89,8 @@ fun FilesScreen() {
                     Icon(Icons.Default.Description, null, tint = if (isSelected) CYAN else TEXT2, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(file.name, color = if (isSelected) CYAN else TEXT, fontSize = 14.sp, fontWeight = FontWeight.Medium, fontFamily = FontFamily.Monospace)
-                        Text(file.description, color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                        Text(name, color = if (isSelected) CYAN else TEXT, fontSize = 14.sp, fontWeight = FontWeight.Medium, fontFamily = FontFamily.Monospace)
+                        Text(desc, color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
                     }
                     if (isSelected && isDirty) {
                         Box(Modifier.size(8.dp).background(Color(0xFFD29922), RoundedCornerShape(4.dp)))
@@ -138,19 +99,23 @@ fun FilesScreen() {
             }
         }
 
-        if (selectedFile != null) {
+        if (selectedFileName != null) {
             item {
                 Spacer(Modifier.height(4.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("Editing: ${selectedFile?.name}", color = CYAN, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                    Text("Editing: $selectedFileName", color = CYAN, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
                     Row {
                         if (saveMessage != null) {
                             Text(saveMessage!!, color = GREEN, fontSize = 11.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(end = 8.dp))
                         }
                         Button(
                             onClick = {
-                                selectedFile?.let { file ->
-                                    File(filesDir, file.name).writeText(editContent)
+                                selectedFileName?.let { name ->
+                                    // Save to workspace or agent_config
+                                    val wsFile = File(com.openclaw.android.ai.Bootstrap.agentConfigDir(), name)
+                                    val wsFile2 = File(com.openclaw.android.OpenClawApplication.instance.filesDir, "workspace/$name")
+                                    if (wsFile2.exists()) wsFile2.writeText(editContent)
+                                    else wsFile.writeText(editContent)
                                     isDirty = false
                                     saveMessage = "Saved!"
                                 }

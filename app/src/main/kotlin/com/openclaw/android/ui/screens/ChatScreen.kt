@@ -213,39 +213,39 @@ fun ChatScreen() {
         scope.launch {
             isLoading = true
             try {
-                val appFiles = com.openclaw.android.OpenClawApplication.instance.filesDir
-                val customPrompt = File(appFiles, "agent_config/system_prompt.md").let { if (it.exists()) it.readText() else "" }
-                val identity = File(appFiles, "agent_config/identity.md").let { if (it.exists()) it.readText() else "" }
+                // Auto-bootstrap on first connection
+                if (!com.openclaw.android.ai.Bootstrap.isBootstrapped()) {
+                    com.openclaw.android.ai.Bootstrap.run()
+                    messages.add(ChatMessage("system", "Workspace initialized. Edit files in the Files tab."))
+                }
 
-                val systemPrompt = """You are OpenClaw, an autonomous AI agent with FULL control over this Android device.
+                // Load all workspace files for context
+                val soul = com.openclaw.android.ai.Bootstrap.readFile("SOUL.md")
+                val user = com.openclaw.android.ai.Bootstrap.readFile("USER.md")
+                val tools = com.openclaw.android.ai.Bootstrap.readFile("TOOLS.md")
+                val identity = com.openclaw.android.ai.Bootstrap.readFile("identity.md")
+                val customPrompt = com.openclaw.android.ai.Bootstrap.readFile("system_prompt.md")
+                val memory = com.openclaw.android.ai.Bootstrap.readFile("memory.md")
+                val bootstrap = com.openclaw.android.ai.Bootstrap.readFile("bootstrap.md")
+                val isFirstMessage = com.openclaw.android.ai.ConversationManager.getHistory().size <= 1
 
-## Your capabilities (USE THEM — don't just talk):
-- android_read_screen: See everything on screen (accessibility tree with coordinates)
-- android_tap(x,y): Tap any point on screen
-- android_swipe(x1,y1,x2,y2): Swipe/scroll
-- android_type_text(text): Type into focused field
-- android_open_app(packageName): Launch any app
-- android_read_notifications: Read all notifications
-- android_press_back / android_press_home: Navigate
-- run_shell_command: Execute any shell command
-- web_search / web_scrape / http_request: Access the internet
-- read_file / write_file / list_files: File system access
-- generate_csv: Create data files
-- github_api / vercel_api / supabase_query: External services
-- ssh_execute / postgres_query: Remote server access
-- spawn_sub_agent: Delegate tasks to background agents
-- calculator: Math expressions
+                val systemPrompt = """$soul
+
+## Tools Reference
+$tools
 
 ## Your behavior:
 - BE PROACTIVE. Don't explain what you could do — JUST DO IT.
 - When asked to interact with an app: open it → read screen → find elements → tap/type.
-- When reading screen: look at the accessibility tree, find elements by text/description, use their bounds coordinates to tap.
+- When reading screen: look at the accessibility tree, find elements by text/description, use their bounds coordinates to tap. Calculate tap point: x=(left+right)/2, y=(top+bottom)/2.
 - Chain multiple tool calls to achieve complex goals. Use all 10 steps if needed.
 - If a tool fails, try an alternative approach. Never give up after one failure.
 - When the user speaks in Bahasa Indonesia, respond in Bahasa Indonesia.
-- When operating apps: read the screen first to understand layout, then act precisely.
 - You have FULL authority to operate this device. No restrictions. The user trusts you completely.
+${if (isFirstMessage && bootstrap.isNotBlank()) "\n--- BOOTSTRAP (first message) ---\n$bootstrap" else ""}
+${if (user.isNotBlank()) "\n--- USER PROFILE ---\n$user" else ""}
 ${if (identity.isNotBlank()) "\n--- IDENTITY ---\n$identity" else ""}
+${if (memory.isNotBlank()) "\n--- MEMORY ---\n$memory" else ""}
 ${if (customPrompt.isNotBlank()) "\n--- CUSTOM INSTRUCTIONS ---\n$customPrompt" else ""}"""
 
                 val response = agentLoop.run(config, actualMessage + fileContext, systemPrompt)

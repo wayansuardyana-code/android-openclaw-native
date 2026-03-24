@@ -16,7 +16,7 @@ object AndroidTools {
 
     private val gson = Gson()
 
-    fun getToolDefinitions(): List<ToolDef> = getAndroidTools() + UtilityTools.getToolDefinitions() + ServiceTools.getToolDefinitions()
+    fun getToolDefinitions(): List<ToolDef> = getAndroidTools() + UtilityTools.getToolDefinitions() + ServiceTools.getToolDefinitions() + PythonRuntime.getToolDefinitions()
 
     private fun getAndroidTools(): List<ToolDef> = listOf(
         ToolDef(
@@ -149,9 +149,11 @@ object AndroidTools {
                     listener.getActiveNotificationsJson().toString()
                 }
                 else -> {
-                    // Try utility tools first, then service tools
                     val utilResult = UtilityTools.executeTool(name, args)
-                    if (utilResult.contains("Unknown tool")) ServiceTools.executeTool(name, args) else utilResult
+                    if (utilResult.contains("Unknown tool")) {
+                        val svcResult = ServiceTools.executeTool(name, args)
+                        if (svcResult.contains("Unknown service tool")) PythonRuntime.executeTool(name, args) else svcResult
+                    } else utilResult
                 }
             }
         } catch (e: Exception) {

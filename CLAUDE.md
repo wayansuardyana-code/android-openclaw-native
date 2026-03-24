@@ -88,7 +88,7 @@ POST /agent/chat                  # {message, provider, apiKey, model, baseUrl} 
 - POST /agent/chat endpoint accepts {message, provider, apiKey, model, baseUrl}
 - Max 10 tool-calling steps per agent run
 
-## LLM Tools (17 total)
+## LLM Tools (22 total)
 ### Android Device Tools (8)
 android_read_screen, android_tap, android_swipe, android_type_text,
 android_press_back, android_press_home, android_open_app, android_read_notifications
@@ -96,6 +96,9 @@ android_press_back, android_press_home, android_open_app, android_read_notificat
 ### Utility Tools (9)
 run_shell_command, web_scrape, web_search, calculator,
 read_file, write_file, list_files, generate_csv, http_request
+
+### Service Tools (5) — require API tokens
+github_api, vercel_api, supabase_query, google_workspace, authenticated_api
 
 ## File System
 - Agent config files: `filesDir/agent_config/` (identity.md, memory.md, system_prompt.md, skills.md)
@@ -114,9 +117,32 @@ read_file, write_file, list_files, generate_csv, http_request
 - v0.6.0: Logs copyable (SelectionContainer), Terminal tab with shell execution
 - v0.6.0: File editor saves to disk, system prompt from files
 
-## TODO (remaining improvements from user feedback)
-- Chat: slash command autocomplete (type "/" shows commands)
-- Chat: file attachment icon
-- Chat: auto-bootstrap on first LLM connect
-- Dashboard: kanban board (like builderz-labs/mission-control)
-- Connectors: wire UI to actual tool registration (currently dummy toggles)
+## Auth Connectors (how tokens are stored)
+- All service tokens stored via AgentConfig.setKeyForProvider(provider, key)
+- GitHub: Personal Access Token (github.com/settings/tokens)
+- Vercel: API Token (vercel.com/account/tokens)
+- Supabase: anon key + URL (supabase.com/dashboard/project/settings/api)
+- Google Workspace: OAuth2 access token or service account key
+- Generic: any Bearer token for any REST API
+
+## Chat Features
+- 16 slash commands (type "/" to see autocomplete popup)
+- File attachment via paperclip icon (reads text content, sends to LLM)
+- System messages for /status, /tools, /help, /identity, /prompt
+- Messages are selectable (long-press to copy)
+
+## v0.7.0 Changelog
+- 22 LLM tools (8 device + 9 utility + 5 service)
+- 13 LLM providers with dropdown selector
+- Slash commands with autocomplete popup
+- File attachment in chat
+- Copyable logs + Terminal tab with shell execution
+- Service connectors (GitHub, Vercel, Supabase, Google Workspace)
+- Single toggle start/stop, check for updates, push notification toggle
+
+## TODO (remaining)
+- Dashboard: kanban board
+- Connectors UI: wire toggles to actual AgentConfig key storage
+- Push notifications: actual notification logic (not just toggle)
+- Chat history persistence to Room DB
+- Streaming LLM responses

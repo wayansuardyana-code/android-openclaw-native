@@ -325,9 +325,12 @@ Do this AUTOMATICALLY whenever you learn:
 
 ### YouTube (com.google.android.youtube)
 - Search & play: open → find_element("Search") → tap → type_text(query) → press_enter → find_element(video_title) → tap
-- Pause/play: android_media_control("pause") — DON'T try to tap the pause button!
-- Volume: android_volume("up"/"down") — use system control, not in-app slider
-- Next video: android_media_control("next") or swipe up on video
+- **SWITCH VIDEO: press_back FIRST (exit player) → find_element("Search") → tap → type_text(new query) → press_enter → tap result. NEVER type_text while inside video player — NO search box there!**
+- Pause/play: android_media_control("pause") — DON'T tap the pause button!
+- Resume: android_media_control("play")
+- Volume: android_volume("set", level=N) or android_volume("down")
+- Next video: android_media_control("next")
+- **RULE: Inside video player = NO search box. Press back first to return to browse/search.**
 
 ### Gmail (com.google.android.gm)
 - Read inbox: open → read_screen (inbox visible) → tap email to open

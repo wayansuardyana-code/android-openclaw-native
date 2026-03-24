@@ -46,29 +46,64 @@ class AgentLoop(private val llmClient: LlmClient) {
      */
     private fun cleanLlmJson(raw: String): String {
         val trimmed = raw.trim()
-        // Find the outermost JSON structure
         val startChar = trimmed.firstOrNull() ?: return raw
-        val endChar = if (startChar == '{') '}' else if (startChar == '[') ']' else return raw
+        if (startChar != '{' && startChar != '[') return raw
+        val endChar = if (startChar == '{') '}' else ']'
 
-        var depth = 0
+        // Track nesting depth for {} and [] separately
+        var braceDepth = 0
+        var bracketDepth = 0
         var inString = false
         var escape = false
+        var lastValidPos = 0  // Track last position that ends a complete value
+
         for (i in trimmed.indices) {
             val c = trimmed[i]
             if (escape) { escape = false; continue }
             if (c == '\\' && inString) { escape = true; continue }
             if (c == '"' && !escape) { inString = !inString; continue }
             if (inString) continue
-            if (c == startChar) depth++
-            if (c == endChar) {
-                depth--
-                if (depth == 0) {
-                    return trimmed.substring(0, i + 1)
+
+            when (c) {
+                '{' -> braceDepth++
+                '}' -> {
+                    braceDepth--
+                    if (braceDepth == 0 && bracketDepth == 0 && startChar == '{') {
+                        return trimmed.substring(0, i + 1)
+                    }
+                    lastValidPos = i
                 }
+                '[' -> bracketDepth++
+                ']' -> {
+                    bracketDepth--
+                    if (bracketDepth == 0 && braceDepth == 0 && startChar == '[') {
+                        return trimmed.substring(0, i + 1)
+                    }
+                    lastValidPos = i
+                }
+                ',' -> lastValidPos = i - 1  // Before comma = end of previous value
             }
         }
-        // JSON not properly closed — try to close it
-        return trimmed.substringBefore("</") + endChar.toString().repeat(depth.coerceAtLeast(0))
+
+        // JSON truncated — close open structures
+        // Strip any incomplete value after last comma/colon
+        var result = if (inString) {
+            // We're in the middle of a string — close it and trim
+            val lastQuote = trimmed.lastIndexOf('"', trimmed.length - 1)
+            if (lastQuote > 0) trimmed.substring(0, lastQuote + 1) else trimmed
+        } else {
+            // Strip trailing incomplete tokens (partial key, colon without value, etc.)
+            trimmed.trimEnd().replace(Regex("[,:\"\\s]+$"), "")
+        }
+
+        // Remove XML tags if present
+        result = result.substringBefore("</")
+
+        // Close all open structures
+        repeat(braceDepth.coerceAtLeast(0)) { result += "}" }
+        repeat(bracketDepth.coerceAtLeast(0)) { result += "]" }
+
+        return result
     }
 
     private val _isThinking = MutableStateFlow(false)

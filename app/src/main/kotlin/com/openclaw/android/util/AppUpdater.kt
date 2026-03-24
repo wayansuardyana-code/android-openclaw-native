@@ -46,8 +46,17 @@ object AppUpdater {
      */
     suspend fun checkForUpdate(): UpdateInfo? = withContext(Dispatchers.IO) {
         try {
-            val json = URL(API_URL).readText()
-            val release = Gson().fromJson(json, JsonObject::class.java)
+            val conn = java.net.URL(API_URL).openConnection() as java.net.HttpURLConnection
+            conn.setRequestProperty("Accept", "application/vnd.github+json")
+            conn.setRequestProperty("User-Agent", "OpenClaw-Android")
+            conn.connectTimeout = 10000
+            conn.readTimeout = 10000
+            val json = conn.inputStream.bufferedReader().readText()
+            conn.disconnect()
+
+            val reader = com.google.gson.stream.JsonReader(java.io.StringReader(json))
+            reader.isLenient = true
+            val release = Gson().fromJson<JsonObject>(reader, JsonObject::class.java)
 
             val tagName = release.get("tag_name")?.asString ?: return@withContext null
             val body = release.get("body")?.asString ?: ""

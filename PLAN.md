@@ -466,6 +466,87 @@ Tasks:
 
 **Dependencies:** Phase 5 (Google Auth) must be done first.
 
+### Phase 7: Proactive Agent — Self-Initiating AI ⏳ (v4.0)
+
+**Goal:** Agent doesn't wait for user. It monitors, decides, and acts autonomously.
+
+```
+Proactive Behaviors:
+├── 7.1 Heartbeat System (periodic self-check)
+│   ├── Agent wakes every N minutes (configurable: 5m, 15m, 30m, 1h)
+│   ├── Checks: notifications, battery, time, calendar, pending tasks
+│   ├── Decides: anything needs attention? → acts or notifies user
+│   ├── Examples:
+│   │   ├── "Battery 15% — should I enable power saving?"
+│   │   ├── "You have a meeting in 30 min — open Google Maps for directions?"
+│   │   ├── "3 unread WhatsApp from Boss — want me to summarize?"
+│   │   ├── "Stock price dropped 5% — alert per your rules"
+│   │   └── "Daily report time — generating and sending to Telegram"
+│   └── User configures rules in HEARTBEAT.md
+│
+├── 7.2 Event-Driven Triggers
+│   ├── Notification arrives → agent reads it → decides action
+│   │   ├── OTP from bank → auto-copy to clipboard
+│   │   ├── WhatsApp from boss → summarize + suggest reply
+│   │   ├── Delivery notification → track package
+│   │   └── Calendar reminder → prepare relevant info
+│   ├── App opened → agent observes context
+│   ├── Phone connected to WiFi → sync data
+│   ├── Battery low → reduce background activity
+│   └── Time-based → morning briefing, evening summary
+│
+├── 7.3 Self-Learning Memory
+│   ├── Agent observes user patterns over time
+│   │   ├── "User always opens Instagram at 9pm"
+│   │   ├── "User checks email first thing in morning"
+│   │   ├── "User prefers Bahasa Indonesia for casual, English for work"
+│   ├── Stores observations in memory.md + MemoryEntity (vector)
+│   ├── Uses patterns to anticipate needs
+│   └── User can review + delete learned patterns
+│
+├── 7.4 Auto-Update Workspace Files
+│   ├── After bootstrap conversation → auto-populate USER.md
+│   ├── After learning preferences → update memory.md
+│   ├── After discovering tools → update skills.md
+│   ├── Agent writes to workspace files using write_file tool
+│   └── User gets notification when files are updated
+│
+├── 7.5 Scheduled Tasks (Cron-like)
+│   ├── User says "every morning at 8, give me weather + news briefing"
+│   ├── Agent stores schedule in Room DB
+│   ├── Service checks schedule on heartbeat
+│   ├── Executes task at scheduled time
+│   ├── Sends result via push notification or Telegram
+│   └── UI: schedule manager in Dashboard
+│
+├── 7.6 Conversation Continuity
+│   ├── Agent remembers incomplete conversations
+│   ├── "Yesterday you asked me to research X — I found more info"
+│   ├── "Your package from Tokopedia was delivered (based on notification)"
+│   ├── Proactively follows up on open items
+│   └── Uses ConversationManager + MemoryEntity for context
+│
+└── 7.7 Permission & Safety
+    ├── User defines what agent can do without asking
+    │   ├── ALWAYS ask: delete files, send money, install apps
+    │   ├── AUTO: read notifications, check weather, file management
+    │   ├── CONFIGURABLE: send messages, make purchases, access contacts
+    ├── Safety levels: AUTONOMOUS / ASK_FIRST / NEVER
+    ├── Audit log: every proactive action logged
+    └── User can review and revoke any action
+```
+
+**Deliverable:** Agent that monitors your phone, learns your habits, anticipates your needs, and takes action without being asked. Like a real personal assistant.
+
+**Key Technical Components:**
+- Heartbeat service (periodic coroutine in OpenClawService)
+- NotificationListener events → agent processing pipeline
+- Room DB scheduled_tasks table
+- Safety rules in HEARTBEAT.md (user-configurable)
+- Memory write-back (agent updates workspace files)
+
+**Dependencies:** Phase 1-4 (current) must be stable first.
+
 ---
 
 ## Device Compatibility

@@ -398,6 +398,74 @@ Tasks:
 - State: Phone is always master, web is a mirror/remote control
 - GWS: Google login token = GWS API token (no separate auth flow)
 
+### Phase 6: Supabase Cloud Sync — Uninstall-Proof Data ⏳ (v3.0)
+
+**Goal:** All user data synced to Supabase. Uninstall → reinstall → login → everything restored.
+
+```
+Architecture:
+
+┌───────────────────┐          ┌─────────────────────┐
+│  Android App      │  sync    │  Supabase PostgreSQL │
+│  Room SQLite      │ ──────→  │  Cloud database      │
+│  (local-first)    │ ←──────  │  (source of truth)   │
+└───────────────────┘          └─────────────────────┘
+         ↑                              ↑
+    Login with Google             Same account
+         ↓                              ↓
+┌───────────────────┐          ┌─────────────────────┐
+│  Web App (Vercel) │  sync    │  Same Supabase DB    │
+│  Browser UI       │ ──────→  │                      │
+└───────────────────┘          └─────────────────────┘
+
+Data synced to Supabase:
+├── Chat history (all messages, all sessions)
+├── API keys & tokens (encrypted, per-user)
+├── LLM provider config (active provider, model)
+├── Service connections (GitHub, Vercel, etc.)
+├── Workspace files (SOUL.md, USER.md, memory.md, etc.)
+├── Tool settings & preferences
+├── Kanban tasks
+├── Agent session logs
+├── Memory embeddings (vector search in pgvector)
+└── Skill configurations
+
+Supabase Tables:
+├── users (Google auth ID, email, name)
+├── user_config (key-value: provider, model, tokens — encrypted)
+├── chat_messages (role, content, timestamp, session_id, user_id)
+├── workspace_files (filename, content, user_id, updated_at)
+├── memories (content, embedding vector, importance, user_id)
+├── tasks (title, status, agent_id, user_id)
+├── connected_services (service_id, encrypted_token, user_id)
+└── agent_sessions (model, status, tokens_used, user_id)
+
+Sync Strategy:
+├── Local-first: app works offline, syncs when online
+├── On every write: debounced sync to Supabase (500ms)
+├── On app open: pull latest from Supabase if newer
+├── Conflict resolution: latest timestamp wins
+├── Encryption: API tokens encrypted with user's key before sync
+└── pgvector: memory embeddings stored in Supabase for cross-device RAG
+
+Tasks:
+├── 6.1 Supabase schema — create all tables with RLS policies
+├── 6.2 Auth — Google Sign-In on Android + Supabase Auth
+├── 6.3 SyncManager.kt — background sync engine
+│   ├── Debounced writes (Room → Supabase)
+│   ├── Pull on startup (Supabase → Room)
+│   ├── Conflict resolution (timestamp-based)
+│   └── Offline queue (sync when back online)
+├── 6.4 Encrypt sensitive data before sync (API keys, tokens)
+├── 6.5 Migrate existing local data on first login
+├── 6.6 Web app reads same Supabase data
+└── 6.7 pgvector for cloud-based semantic memory search
+```
+
+**Deliverable:** Login with Google → all data restored. Works across Android app + web app. Uninstall-proof.
+
+**Dependencies:** Phase 5 (Google Auth) must be done first.
+
 ---
 
 ## Device Compatibility

@@ -3,10 +3,12 @@ package com.openclaw.android.ai
 import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
+import com.google.gson.stream.JsonReader
 import com.openclaw.android.util.NotificationHelper
 import com.openclaw.android.util.ServiceState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.io.StringReader
 
 /**
  * The AI Agent loop.
@@ -23,6 +25,13 @@ class AgentLoop(private val llmClient: LlmClient) {
 
     private val gson = Gson()
     private val maxSteps = 25
+
+    /** Parse JSON leniently — LLM output is often not strictly valid */
+    private fun <T> parseLenient(json: String, clazz: Class<T>): T {
+        val reader = JsonReader(StringReader(json))
+        reader.isLenient = true
+        return gson.fromJson(reader, clazz)
+    }
 
     private val _isThinking = MutableStateFlow(false)
     val isThinking = _isThinking.asStateFlow()
@@ -68,42 +77,49 @@ class AgentLoop(private val llmClient: LlmClient) {
 
                 // Check if it's a tool call (Anthropic format)
                 if (content.startsWith("{") && content.contains("\"type\":\"tool_use\"")) {
-                    val toolCall = gson.fromJson(content, JsonObject::class.java)
-                    val toolName = toolCall.get("name").asString
-                    val toolInput = toolCall.getAsJsonObject("input") ?: JsonObject()
-                    val toolId = toolCall.get("id")?.asString ?: "tool_$step"
+                    try {
+                        val toolCall = parseLenient(content, JsonObject::class.java)
+                        val toolName = toolCall.get("name")?.asString ?: continue
+                        val toolInput = toolCall.getAsJsonObject("input") ?: JsonObject()
 
-                    ServiceState.addLog("Agent: calling tool $toolName")
-                    val toolResult = AndroidTools.executeTool(toolName, toolInput)
-                    ServiceState.addLog("Agent: tool $toolName returned ${toolResult.take(100)}...")
+                        ServiceState.addLog("Agent: calling tool $toolName")
+                        val toolResult = AndroidTools.executeTool(toolName, toolInput)
+                        ServiceState.addLog("Agent: tool $toolName returned ${toolResult.take(100)}...")
 
-                    // Add assistant message with tool use
-                    messages.add(LlmClient.Message("assistant", content))
-                    // Add tool result
-                    messages.add(LlmClient.Message("user", "[Tool result for $toolName]: $toolResult"))
-                    continue
+                        messages.add(LlmClient.Message("assistant", content))
+                        messages.add(LlmClient.Message("user", "[Tool result for $toolName]: $toolResult"))
+                        continue
+                    } catch (e: Exception) {
+                        ServiceState.addLog("Agent: tool parse error (Anthropic) — ${e.message?.take(80)}")
+                        // Treat as text response if parse fails
+                    }
                 }
 
                 // Check if it's a tool call (OpenAI format)
                 if (content.startsWith("[") && content.contains("\"function\"")) {
-                    val toolCalls = gson.fromJson(content, JsonArray::class.java)
-                    val results = StringBuilder()
+                    try {
+                        val toolCalls = parseLenient(content, JsonArray::class.java)
+                        val results = StringBuilder()
 
-                    for (tc in toolCalls) {
-                        val call = tc.asJsonObject
-                        val fn = call.getAsJsonObject("function")
-                        val toolName = fn.get("name").asString
-                        val argsStr = fn.get("arguments").asString
-                        val toolInput = gson.fromJson(argsStr, JsonObject::class.java)
+                        for (tc in toolCalls) {
+                            val call = tc.asJsonObject
+                            val fn = call.getAsJsonObject("function")
+                            val toolName = fn.get("name")?.asString ?: continue
+                            val argsStr = fn.get("arguments")?.asString ?: "{}"
+                            val toolInput = parseLenient(argsStr, JsonObject::class.java)
 
-                        ServiceState.addLog("Agent: calling tool $toolName")
-                        val toolResult = AndroidTools.executeTool(toolName, toolInput)
-                        results.append("[$toolName]: $toolResult\n")
+                            ServiceState.addLog("Agent: calling tool $toolName")
+                            val toolResult = AndroidTools.executeTool(toolName, toolInput)
+                            results.append("[$toolName]: $toolResult\n")
+                        }
+
+                        messages.add(LlmClient.Message("assistant", content))
+                        messages.add(LlmClient.Message("user", results.toString()))
+                        continue
+                    } catch (e: Exception) {
+                        ServiceState.addLog("Agent: tool parse error (OpenAI) — ${e.message?.take(80)}")
+                        // Treat as text response if parse fails
                     }
-
-                    messages.add(LlmClient.Message("assistant", content))
-                    messages.add(LlmClient.Message("user", results.toString()))
-                    continue
                 }
 
                 // Plain text response — we're done

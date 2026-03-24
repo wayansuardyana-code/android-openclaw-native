@@ -93,7 +93,11 @@ class LlmClient {
         val respText = response.bodyAsText()
         if (respText.isBlank()) return LlmResponse(content = "", error = "Empty response from API")
         if (!respText.trimStart().startsWith("{")) return LlmResponse(content = "", error = "Not JSON: ${respText.take(150)}")
-        val respJson = try { gson.fromJson(respText, JsonObject::class.java) } catch (e: Exception) { return LlmResponse(content = "", error = "Parse error: ${e.message?.take(100)}") }
+        val respJson = try {
+            val reader = com.google.gson.stream.JsonReader(java.io.StringReader(respText))
+            reader.isLenient = true
+            gson.fromJson<JsonObject>(reader, JsonObject::class.java)
+        } catch (e: Exception) { return LlmResponse(content = "", error = "Parse error: ${e.message?.take(100)}") }
 
         if (respJson.has("error")) {
             val errObj = respJson.get("error")
@@ -177,7 +181,11 @@ class LlmClient {
         val respText = response.bodyAsText()
         if (respText.isBlank()) return LlmResponse(content = "", error = "Empty response from API")
         if (!respText.trimStart().startsWith("{")) return LlmResponse(content = "", error = "Not JSON: ${respText.take(150)}")
-        val respJson = try { gson.fromJson(respText, JsonObject::class.java) } catch (e: Exception) { return LlmResponse(content = "", error = "Parse error: ${e.message?.take(100)}") }
+        val respJson = try {
+            val reader = com.google.gson.stream.JsonReader(java.io.StringReader(respText))
+            reader.isLenient = true
+            gson.fromJson<JsonObject>(reader, JsonObject::class.java)
+        } catch (e: Exception) { return LlmResponse(content = "", error = "Parse error: ${e.message?.take(100)}") }
 
         if (respJson.has("error")) {
             val errObj = respJson.get("error")

@@ -64,15 +64,17 @@ class OpenClawService : Service() {
             }
         }
 
-        // Start Telegram bot polling (if token is configured)
+        // Start Telegram bot + periodic check for new token
         scope.launch {
-            try {
-                kotlinx.coroutines.delay(1000) // Let bridge server initialize first
-                telegramBot?.stop()
-                telegramBot = TelegramBotService()
-                telegramBot?.start()
-            } catch (e: Exception) {
-                ServiceState.addLog("Telegram bot error: ${e.message}")
+            kotlinx.coroutines.delay(1000)
+            // Try immediately
+            tryStartTelegram()
+            // Then check every 30s if token was added while service is running
+            while (true) {
+                kotlinx.coroutines.delay(30000)
+                if (telegramBot == null || telegramBot?.isActive() != true) {
+                    tryStartTelegram()
+                }
             }
         }
 
@@ -82,6 +84,20 @@ class OpenClawService : Service() {
         ServiceState.addLog("Bridge API ready at http://localhost:18790")
 
         return START_NOT_STICKY  // Don't auto-restart (BootReceiver handles that)
+    }
+
+    private fun tryStartTelegram() {
+        try {
+            val token = com.openclaw.android.ai.AgentConfig.getKeyForProvider("telegram")
+            if (token.isBlank()) return
+            if (telegramBot?.isActive() == true) return
+            telegramBot?.stop()
+            telegramBot = TelegramBotService()
+            telegramBot?.start()
+            ServiceState.addLog("Telegram bot started")
+        } catch (e: Exception) {
+            ServiceState.addLog("Telegram bot error: ${e.message}")
+        }
     }
 
     override fun onDestroy() {

@@ -80,7 +80,7 @@ fun DashboardScreen() {
     var storageFree by remember { mutableStateOf("--") }
     var batteryLevel by remember { mutableStateOf(0) }
     var batteryCharging by remember { mutableStateOf(false) }
-    var tokensUsed by remember { mutableStateOf(0L) }
+    val tokensUsed by com.openclaw.android.ai.ConversationManager.totalTokensUsed.collectAsState()
 
     LaunchedEffect(Unit) {
         while (true) {

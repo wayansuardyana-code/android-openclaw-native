@@ -83,7 +83,18 @@ class OpenClawService : Service() {
         ServiceState.addLog("Node.js runtime: not yet integrated (Phase 1b)")
         ServiceState.addLog("Bridge API ready at http://localhost:18790")
 
-        return START_NOT_STICKY  // Don't auto-restart (BootReceiver handles that)
+        // Request battery optimization exemption
+        try {
+            val pm = getSystemService(POWER_SERVICE) as PowerManager
+            if (!pm.isIgnoringBatteryOptimizations(packageName)) {
+                val intent = android.content.Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                intent.data = android.net.Uri.parse("package:$packageName")
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                startActivity(intent)
+            }
+        } catch (_: Exception) {}
+
+        return START_STICKY  // Auto-restart if killed
     }
 
     private fun tryStartTelegram() {

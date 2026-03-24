@@ -155,6 +155,14 @@ fun ChatScreen() {
         }
     }
 
+    // Camera
+    var photoUri by remember { mutableStateOf<Uri?>(null) }
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        if (success && photoUri != null) {
+            attachedFile = "photo.jpg" to "[Photo taken: ${photoUri}]"
+        }
+    }
+
     // Voice input
     var isRecording by remember { mutableStateOf(false) }
     var hasMicPermission by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) }
@@ -410,8 +418,18 @@ ${if (customPrompt.isNotBlank()) "\n--- CUSTOM INSTRUCTIONS ---\n$customPrompt" 
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Attach button
-            IconButton(onClick = { filePicker.launch("*/*") }, modifier = Modifier.size(34.dp)) {
-                Icon(Icons.Default.AttachFile, "Attach", tint = TEXT2, modifier = Modifier.size(18.dp))
+            IconButton(onClick = { filePicker.launch("*/*") }, modifier = Modifier.size(30.dp)) {
+                Icon(Icons.Default.AttachFile, "Attach", tint = TEXT2, modifier = Modifier.size(16.dp))
+            }
+            // Camera button
+            IconButton(onClick = {
+                try {
+                    val photoFile = File(com.openclaw.android.OpenClawApplication.instance.getExternalFilesDir(null), "photo_${System.currentTimeMillis()}.jpg")
+                    photoUri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", photoFile)
+                    cameraLauncher.launch(photoUri!!)
+                } catch (e: Exception) { android.widget.Toast.makeText(context, "Camera error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show() }
+            }, modifier = Modifier.size(30.dp)) {
+                Icon(Icons.Default.CameraAlt, "Camera", tint = TEXT2, modifier = Modifier.size(16.dp))
             }
 
             // Mic button

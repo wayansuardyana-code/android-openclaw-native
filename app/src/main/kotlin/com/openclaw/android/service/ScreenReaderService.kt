@@ -234,6 +234,65 @@ class ScreenReaderService : AccessibilityService() {
         }
     }
 
+    /**
+     * Capture screenshot and save to file. Returns JSON result string.
+     * Wraps the callback-based API into a suspend function.
+     */
+    /**
+     * Capture screenshot and save to PNG file. Returns JSON result.
+     * Uses AccessibilityService API (Android 11+).
+     */
+    suspend fun captureScreenshot(outputPath: String): String {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            return """{"error":"Screenshot requires Android 11+"}"""
+        }
+        return captureScreenshotApi30(outputPath)
+    }
+
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.R)
+    private suspend fun captureScreenshotApi30(outputPath: String): String {
+        return kotlin.coroutines.suspendCoroutine { cont ->
+            val cb = ScreenshotCallback(outputPath, cont)
+            takeScreenshot(android.view.Display.DEFAULT_DISPLAY, mainExecutor, cb)
+        }
+    }
+
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.R)
+    private class ScreenshotCallback(
+        private val outputPath: String,
+        private val cont: kotlin.coroutines.Continuation<String>
+    ) : AccessibilityService.TakeScreenshotCallback {
+        override fun onSuccess(result: ScreenshotResult) {
+            try {
+                val bitmap = android.graphics.Bitmap.wrapHardwareBuffer(
+                    result.hardwareBuffer, result.colorSpace
+                )
+                if (bitmap != null) {
+                    val softBitmap = bitmap.copy(android.graphics.Bitmap.Config.ARGB_8888, false)
+                    val file = java.io.File(outputPath)
+                    java.io.FileOutputStream(file).use { out ->
+                        softBitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 90, out)
+                    }
+                    softBitmap.recycle()
+                    bitmap.recycle()
+                    result.hardwareBuffer.close()
+                    cont.resumeWith(Result.success(
+                        """{"success":true,"path":"$outputPath","size":${file.length()}}"""
+                    ))
+                } else {
+                    cont.resumeWith(Result.success("""{"error":"Failed to create bitmap"}"""))
+                }
+            } catch (e: Exception) {
+                cont.resumeWith(Result.success(
+                    """{"error":"Screenshot save failed: ${e.message?.replace("\"", "'")}"}"""
+                ))
+            }
+        }
+        override fun onFailure(errorCode: Int) {
+            cont.resumeWith(Result.success("""{"error":"Screenshot failed with code $errorCode"}"""))
+        }
+    }
+
     companion object {
         @Volatile var instance: ScreenReaderService? = null
             private set

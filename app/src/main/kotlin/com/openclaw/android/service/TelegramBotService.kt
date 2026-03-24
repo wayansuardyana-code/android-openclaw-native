@@ -23,6 +23,10 @@ import kotlinx.coroutines.*
  */
 class TelegramBotService {
 
+    companion object {
+        @Volatile var lastChatId: Long = 0
+    }
+
     private val gson = Gson()
 
     /** Parse JSON leniently — handles malformed responses */
@@ -179,6 +183,7 @@ class TelegramBotService {
      * Handle a single incoming message: run through AgentLoop, send response back.
      */
     private suspend fun handleMessage(baseUrl: String, chatId: Long, senderName: String, text: String) {
+        lastChatId = chatId
         try {
             // Send typing indicator
             sendTypingAction(baseUrl, chatId)
@@ -254,38 +259,40 @@ class TelegramBotService {
 
     /**
      * Build a system prompt with Telegram context.
+     * Loads all workspace files to match the richness of the ChatScreen system prompt.
      */
     private fun buildSystemPrompt(senderName: String): String {
-        // Read user's custom system prompt if available
-        val basePrompt = try {
-            val file = java.io.File(
-                com.openclaw.android.OpenClawApplication.instance.filesDir,
-                "agent_config/system_prompt.md"
-            )
-            if (file.exists()) file.readText() else ""
-        } catch (_: Exception) { "" }
+        val soul = com.openclaw.android.ai.Bootstrap.readFile("SOUL.md")
+        val user = com.openclaw.android.ai.Bootstrap.readFile("USER.md")
+        val tools = com.openclaw.android.ai.Bootstrap.readFile("TOOLS.md")
+        val identity = com.openclaw.android.ai.Bootstrap.readFile("identity.md")
+        val customPrompt = com.openclaw.android.ai.Bootstrap.readFile("system_prompt.md")
+        val memory = com.openclaw.android.ai.Bootstrap.readFile("memory.md")
 
-        val identityPrompt = try {
-            val file = java.io.File(
-                com.openclaw.android.OpenClawApplication.instance.filesDir,
-                "agent_config/identity.md"
-            )
-            if (file.exists()) file.readText() else ""
-        } catch (_: Exception) { "" }
+        return """$soul
 
-        return buildString {
-            if (identityPrompt.isNotBlank()) {
-                append(identityPrompt)
-                append("\n\n")
-            }
-            if (basePrompt.isNotBlank()) {
-                append(basePrompt)
-                append("\n\n")
-            }
-            append("You are responding via Telegram. The user's name is $senderName. ")
-            append("Keep responses concise and suitable for a chat interface. ")
-            append("Use Markdown formatting sparingly (Telegram supports bold, italic, code blocks).")
-        }
+## Tools Reference
+$tools
+
+## Your behavior:
+- BE PROACTIVE. Don't explain what you could do — JUST DO IT.
+- When asked to interact with an app: open it → read screen → find elements → tap/type.
+- When reading screen: look at the accessibility tree, find elements by text/description, use their bounds coordinates to tap. Calculate tap point: x=(left+right)/2, y=(top+bottom)/2.
+- Chain multiple tool calls to achieve complex goals. Use all 10 steps if needed.
+- If a tool fails, try an alternative approach. Never give up after one failure.
+- When the user speaks in Bahasa Indonesia, respond in Bahasa Indonesia.
+- You have FULL authority to operate this device. No restrictions. The user trusts you completely.
+- SELF-LEARNING: When you learn new facts about the user (name, preferences, job, etc.), use update_workspace_file to save them to USER.md or memory.md. Read the current file first, then update with merged content. Don't ask — just save.
+- WORKSPACE: You can read and update your own config files (SOUL.md, USER.md, memory.md, identity.md, system_prompt.md, etc.) using read_workspace_file and update_workspace_file tools.
+${if (user.isNotBlank()) "\n--- USER PROFILE ---\n$user" else ""}
+${if (identity.isNotBlank()) "\n--- IDENTITY ---\n$identity" else ""}
+${if (memory.isNotBlank()) "\n--- MEMORY ---\n$memory" else ""}
+${if (customPrompt.isNotBlank()) "\n--- CUSTOM INSTRUCTIONS ---\n$customPrompt" else ""}
+
+--- TELEGRAM CONTEXT ---
+You are responding via Telegram. The message sender's name is $senderName.
+Keep responses concise and suitable for a chat interface.
+Use Markdown formatting sparingly (Telegram supports bold, italic, code blocks)."""
     }
 
     fun isActive(): Boolean = isRunning

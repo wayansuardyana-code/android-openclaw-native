@@ -15,6 +15,12 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStreamReader
 import org.dhatim.fastexcel.Workbook
+import io.ktor.client.*
+import io.ktor.client.engine.okhttp.*
+import io.ktor.client.request.*
+import io.ktor.client.request.forms.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
 
 /**
  * Non-Android utility tools: shell, web scraper, calculator, file gen.
@@ -195,6 +201,18 @@ object UtilityTools {
                 "required" to listOf("filename", "content")
             )
         ),
+        ToolDef(
+            name = "send_telegram_photo",
+            description = "Send a photo/image file to the current Telegram chat. Use after take_screenshot to send screenshots to the user. The photo is sent to the last active Telegram chat.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "file_path" to mapOf("type" to "string", "description" to "Absolute path to the image file to send"),
+                    "caption" to mapOf("type" to "string", "description" to "Optional caption for the photo")
+                ),
+                "required" to listOf("file_path")
+            )
+        ),
     )
 
     suspend fun executeTool(name: String, args: JsonObject): String {
@@ -252,6 +270,39 @@ object UtilityTools {
                         target.writeText(content)
                         ServiceState.addLog("Workspace updated: $fileName (${content.length} chars)")
                         """{"success":true,"name":"$fileName","size":${target.length()}}"""
+                    }
+                }
+                "send_telegram_photo" -> {
+                    val filePath = args.get("file_path").asString
+                    val caption = args.get("caption")?.asString ?: ""
+                    val file = File(filePath)
+                    if (!file.exists()) return@withContext """{"error":"File not found: $filePath"}"""
+
+                    val token = AgentConfig.getKeyForProvider("telegram")
+                    if (token.isBlank()) return@withContext """{"error":"Telegram bot token not configured"}"""
+
+                    val chatId = com.openclaw.android.service.TelegramBotService.lastChatId
+                    if (chatId == 0L) return@withContext """{"error":"No active Telegram chat"}"""
+
+                    val client = io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp)
+                    try {
+                        client.post("https://api.telegram.org/bot$token/sendPhoto") {
+                            setBody(io.ktor.client.request.forms.MultiPartFormDataContent(
+                                io.ktor.client.request.forms.formData {
+                                    append("chat_id", chatId.toString())
+                                    if (caption.isNotBlank()) append("caption", caption)
+                                    append("photo", file.readBytes(), io.ktor.http.Headers.build {
+                                        append(io.ktor.http.HttpHeaders.ContentType, "image/png")
+                                        append(io.ktor.http.HttpHeaders.ContentDisposition, "filename=${file.name}")
+                                    })
+                                }
+                            ))
+                        }
+                        """{"success":true,"chat_id":$chatId}"""
+                    } catch (e: Exception) {
+                        """{"error":"Failed to send photo: ${e.message?.replace("\"", "'")}"}"""
+                    } finally {
+                        client.close()
                     }
                 }
                 else -> """{"error":"Unknown tool: $name"}"""

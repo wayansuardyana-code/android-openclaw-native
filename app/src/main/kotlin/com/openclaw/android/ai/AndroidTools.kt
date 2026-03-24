@@ -111,6 +111,11 @@ object AndroidTools {
             description = "Read all current notifications on the device. Returns app name, title, text for each notification.",
             inputSchema = mapOf("type" to "object", "properties" to emptyMap<String, Any>())
         ),
+        ToolDef(
+            name = "take_screenshot",
+            description = "Take a screenshot of the current screen and save it as a PNG file. Returns the file path. Requires Android 11+ (API 30) and Accessibility Service enabled. Use with send_telegram_photo to send screenshots to the user.",
+            inputSchema = mapOf("type" to "object", "properties" to emptyMap<String, Any>())
+        ),
     )
 
     suspend fun executeTool(name: String, args: JsonObject): String {
@@ -197,6 +202,19 @@ object AndroidTools {
                     val listener = NotificationReaderService.instance
                         ?: return """{"error":"Notification listener not enabled"}"""
                     listener.getActiveNotificationsJson().toString()
+                }
+                "take_screenshot" -> {
+                    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {
+                        return """{"error":"Screenshot requires Android 11+"}"""
+                    }
+                    val reader = ScreenReaderService.instance
+                        ?: return """{"error":"Accessibility service not enabled"}"""
+                    val context = com.openclaw.android.OpenClawApplication.instance
+                    val dir = java.io.File(context.filesDir, "screenshots")
+                    dir.mkdirs()
+                    val file = java.io.File(dir, "screenshot_${System.currentTimeMillis()}.png")
+
+                    reader.captureScreenshot(file.absolutePath)
                 }
                 else -> {
                     val utilResult = UtilityTools.executeTool(name, args)

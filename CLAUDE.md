@@ -108,4 +108,15 @@ read_file, write_file, list_files, generate_csv, http_request
 - Shizuku integration declared but not yet connected
 - nodejs-mobile integration optional — Kotlin-native AI agent works standalone
 - APK served via `python3 -m http.server 8899` on VPS for download
-- v0.5.1 is latest: Chat UI + 17 tools + file persistence + system prompt from files
+- v0.6.0 is latest build
+- v0.6.0: 13 LLM providers with dropdown, single API key field, editable model name
+- v0.6.0: Toggle start/stop button, check for updates, push notification toggle
+- v0.6.0: Logs copyable (SelectionContainer), Terminal tab with shell execution
+- v0.6.0: File editor saves to disk, system prompt from files
+
+## TODO (remaining improvements from user feedback)
+- Chat: slash command autocomplete (type "/" shows commands)
+- Chat: file attachment icon
+- Chat: auto-bootstrap on first LLM connect
+- Dashboard: kanban board (like builderz-labs/mission-control)
+- Connectors: wire UI to actual tool registration (currently dummy toggles)

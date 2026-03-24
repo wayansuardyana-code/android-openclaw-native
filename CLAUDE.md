@@ -211,6 +211,12 @@ ssh_execute, postgres_query (via SSH tunnel)
 - Crash Logs tab in Logs screen, auto-switches to it if crash detected
 - Crash report includes: time, thread, Android version, device, full stack trace
 
+## Voice Input
+- Android built-in SpeechRecognizer (zero dependency, free)
+- Default language: Indonesian (id-ID) with auto-detect
+- Partial results show in real-time as user speaks
+- Future option: Vosk (com.alphacephei:vosk-android:0.3.75) for 100% offline (~40MB model)
+
 ## Remaining Nice-to-Have (not blocking)
 - Streaming LLM responses
 - Google Sign-In OAuth flow (currently manual token paste)

@@ -77,6 +77,8 @@ GET  /android/notifications
 GET  /android/battery
 POST /android/volume           # {level, stream}
 GET  /android/contacts
+GET  /android/health              # Service status
+POST /agent/chat                  # {message, provider, apiKey, model, baseUrl} → AI agent
 ```
 
 ## AI Agent System
@@ -86,8 +88,24 @@ GET  /android/contacts
 - POST /agent/chat endpoint accepts {message, provider, apiKey, model, baseUrl}
 - Max 10 tool-calling steps per agent run
 
+## LLM Tools (17 total)
+### Android Device Tools (8)
+android_read_screen, android_tap, android_swipe, android_type_text,
+android_press_back, android_press_home, android_open_app, android_read_notifications
+
+### Utility Tools (9)
+run_shell_command, web_scrape, web_search, calculator,
+read_file, write_file, list_files, generate_csv, http_request
+
+## File System
+- Agent config files: `filesDir/agent_config/` (identity.md, memory.md, system_prompt.md, skills.md)
+- Chat reads system_prompt.md + identity.md and injects into LLM system prompt
+- Files are editable from the Files tab in the app
+- API keys persisted via SharedPreferences (AgentConfig.kt)
+
 ## Development Notes
 - PostgreSQL JDBC removed (Android compat issue with MethodHandle on API <26) — use HTTP proxy instead
 - Shizuku integration declared but not yet connected
 - nodejs-mobile integration optional — Kotlin-native AI agent works standalone
 - APK served via `python3 -m http.server 8899` on VPS for download
+- v0.5.1 is latest: Chat UI + 17 tools + file persistence + system prompt from files

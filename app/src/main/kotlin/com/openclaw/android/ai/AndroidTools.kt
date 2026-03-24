@@ -16,7 +16,7 @@ object AndroidTools {
 
     private val gson = Gson()
 
-    fun getToolDefinitions(): List<ToolDef> = getAndroidTools() + UtilityTools.getToolDefinitions()
+    fun getToolDefinitions(): List<ToolDef> = getAndroidTools() + UtilityTools.getToolDefinitions() + ServiceTools.getToolDefinitions()
 
     private fun getAndroidTools(): List<ToolDef> = listOf(
         ToolDef(
@@ -146,7 +146,11 @@ object AndroidTools {
                         ?: return """{"error":"Notification listener not enabled"}"""
                     listener.getActiveNotificationsJson().toString()
                 }
-                else -> UtilityTools.executeTool(name, args)
+                else -> {
+                    // Try utility tools first, then service tools
+                    val utilResult = UtilityTools.executeTool(name, args)
+                    if (utilResult.contains("Unknown tool")) ServiceTools.executeTool(name, args) else utilResult
+                }
             }
         } catch (e: Exception) {
             ServiceState.addLog("Tool error: $name — ${e.message}")

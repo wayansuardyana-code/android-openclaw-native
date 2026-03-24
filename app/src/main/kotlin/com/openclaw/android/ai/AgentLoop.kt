@@ -4,11 +4,16 @@ import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.stream.JsonReader
+import com.openclaw.android.OpenClawApplication
 import com.openclaw.android.util.NotificationHelper
 import com.openclaw.android.util.ServiceState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.io.File
 import java.io.StringReader
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * The AI Agent loop.
@@ -90,6 +95,7 @@ class AgentLoop(private val llmClient: LlmClient) {
 
         val tools = AndroidTools.getToolDefinitions()
         var step = 0
+        val toolsUsed = mutableListOf<String>() // Track for auto-learn
 
         try {
             while (step < maxSteps) {
@@ -115,6 +121,7 @@ class AgentLoop(private val llmClient: LlmClient) {
                         val toolName = toolCall.get("name")?.asString ?: continue
                         val toolInput = toolCall.getAsJsonObject("input") ?: JsonObject()
 
+                        toolsUsed.add(toolName)
                         ServiceState.addLog("Agent: calling tool $toolName")
                         val toolResult = AndroidTools.executeTool(toolName, toolInput)
                         ServiceState.addLog("Agent: tool $toolName returned ${toolResult.take(100)}...")
@@ -124,7 +131,6 @@ class AgentLoop(private val llmClient: LlmClient) {
                         continue
                     } catch (e: Exception) {
                         ServiceState.addLog("Agent: tool parse error (Anthropic) — ${e.message?.take(80)}")
-                        // Treat as text response if parse fails
                     }
                 }
 
@@ -141,6 +147,7 @@ class AgentLoop(private val llmClient: LlmClient) {
                             val argsStr = fn.get("arguments")?.asString ?: "{}"
                             val toolInput = parseLenient(argsStr, JsonObject::class.java)
 
+                            toolsUsed.add(toolName)
                             ServiceState.addLog("Agent: calling tool $toolName")
                             val toolResult = AndroidTools.executeTool(toolName, toolInput)
                             results.append("[$toolName]: $toolResult\n")
@@ -159,6 +166,12 @@ class AgentLoop(private val llmClient: LlmClient) {
                 ServiceState.addLog("Agent: final response (${content.length} chars, ${response.tokensUsed} tokens)")
                 ConversationManager.addAssistantMessage(content)
                 NotificationHelper.notifyAgentResponse("OpenClaw", content.take(200))
+
+                // Auto-learn: save successful multi-step tasks as skills
+                if (step >= 5 && toolsUsed.size >= 3) {
+                    autoLearn(userMessage, toolsUsed, step)
+                }
+
                 return content
             }
 
@@ -175,6 +188,48 @@ class AgentLoop(private val llmClient: LlmClient) {
             return fallback
         } finally {
             _isThinking.value = false
+        }
+    }
+
+    /**
+     * Auto-learn: append successful multi-step task to skills.md.
+     * Only saves if task used 5+ steps and 3+ unique tools.
+     * Lightweight — just appends a few lines, no LLM call needed.
+     */
+    private fun autoLearn(userMessage: String, toolsUsed: List<String>, steps: Int) {
+        try {
+            val uniqueTools = toolsUsed.distinct()
+            val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date())
+            val taskSummary = userMessage.take(80).replace("\n", " ")
+            val toolChain = uniqueTools.joinToString(" → ")
+
+            // Read current skills.md
+            val content = Bootstrap.readFile("skills.md")
+
+            // Don't save duplicates — check if similar task already saved
+            if (content.contains(taskSummary.take(40))) return
+
+            // Append new learned pattern
+            val newSkill = "\n### auto_${System.currentTimeMillis() / 1000}\n" +
+                "- Task: $taskSummary\n" +
+                "- Tools: $toolChain\n" +
+                "- Steps: $steps | Learned: $timestamp\n"
+
+            val updated = content.trimEnd() + "\n" + newSkill
+
+            // Write back — find the right file location
+            val wsFile = File(OpenClawApplication.instance.filesDir, "workspace/skills.md")
+            val cfgFile = File(OpenClawApplication.instance.filesDir, "agent_config/skills.md")
+            val target = when {
+                wsFile.exists() -> wsFile
+                cfgFile.exists() -> cfgFile
+                else -> { wsFile.parentFile?.mkdirs(); wsFile }
+            }
+            target.writeText(updated)
+            ServiceState.addLog("Auto-learn: saved skill from ${uniqueTools.size} tools, $steps steps")
+        } catch (e: Exception) {
+            // Non-critical — don't crash if auto-learn fails
+            ServiceState.addLog("Auto-learn error: ${e.message?.take(60)}")
         }
     }
 }

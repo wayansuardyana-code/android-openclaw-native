@@ -219,7 +219,29 @@ Expected: supabase_query tool calls PostgREST API
 
 ## Public APIs to Integrate
 
-(Research in progress — will be populated with free APIs for weather, news, finance, etc.)
+### Zero-Auth (no API key needed — use immediately via http_request)
+| API | Category | URL | Notes |
+|-----|----------|-----|-------|
+| Open-Meteo | Weather | `api.open-meteo.com/v1/forecast?latitude=X&longitude=Y&current_weather=true` | Unlimited, no key |
+| Currency-API | FX Rates | `cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json` | CDN, 150+ currencies incl IDR |
+| Frankfurter | FX Rates | `api.frankfurter.app/latest?from=USD&to=IDR` | ECB data, no key |
+| MyMemory | Translation | `api.mymemory.translated.net/get?q=Hello&langpair=en\|id` | 5K words/day free |
+| Nager.Date | Holidays | `date.nager.at/api/v3/PublicHolidays/2026/ID` | Indonesia holidays |
+| SEC EDGAR | Finance | `data.sec.gov/api/xbrl/companyfacts/CIK0001045810.json` | NVIDIA filings, unlimited |
+| GoQR.me | QR Code | `api.qrserver.com/v1/create-qr-code/?size=200x200&data=URL` | Returns PNG directly |
+| TinyURL | URL Short | `tinyurl.com/api-create.php?url=URL` | Returns short URL text |
+
+### Free Tier (need API key — register once)
+| API | Category | Free Limit | Why |
+|-----|----------|------------|-----|
+| Brave Search | Search | 2K/month | **DuckDuckGo replacement** — independent index |
+| Finnhub | Finance | 60/min | Real-time stocks, NVIDIA earnings |
+| The Guardian | News | 5K/day | Full article text, tech/AI news |
+| NewsAPI | News | 100/day | 150K+ sources, topic filter |
+| Alpha Vantage | Finance | 25/day | Income statements, fundamentals |
+| Serper.dev | Search | 2500 credits | Google SERP JSON |
+| OpenWeatherMap | Weather | 1M/month | Backup weather, icon codes |
+| Calendarific | Holidays | 1K/year | Islamic holidays for Indonesia |
 
 ---
 

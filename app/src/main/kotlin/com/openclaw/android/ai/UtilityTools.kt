@@ -202,6 +202,17 @@ object UtilityTools {
             )
         ),
         ToolDef(
+            name = "send_telegram_message",
+            description = "Send a text message to the current Telegram chat. Use to report text results, summaries, or data to the user via Telegram. Supports Markdown formatting.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "text" to mapOf("type" to "string", "description" to "Message text to send (supports Markdown: *bold*, _italic_, `code`)")
+                ),
+                "required" to listOf("text")
+            )
+        ),
+        ToolDef(
             name = "send_telegram_photo",
             description = "Send a photo/image file to the current Telegram chat. Use after take_screenshot to send screenshots to the user. The photo is sent to the last active Telegram chat.",
             inputSchema = mapOf(
@@ -270,6 +281,44 @@ object UtilityTools {
                         target.writeText(content)
                         ServiceState.addLog("Workspace updated: $fileName (${content.length} chars)")
                         """{"success":true,"name":"$fileName","size":${target.length()}}"""
+                    }
+                }
+                "send_telegram_message" -> {
+                    val text = args.get("text").asString
+                    val token = AgentConfig.getKeyForProvider("telegram")
+                    if (token.isBlank()) return@withContext """{"error":"Telegram bot token not configured"}"""
+                    val chatId = com.openclaw.android.service.TelegramBotService.lastChatId
+                    if (chatId == 0L) return@withContext """{"error":"No active Telegram chat"}"""
+
+                    val client = HttpClient(OkHttp)
+                    try {
+                        val body = com.google.gson.JsonObject().apply {
+                            addProperty("chat_id", chatId)
+                            addProperty("text", text)
+                            addProperty("parse_mode", "Markdown")
+                        }
+                        val resp = client.post("https://api.telegram.org/bot$token/sendMessage") {
+                            contentType(ContentType.Application.Json)
+                            setBody(body.toString())
+                        }
+                        val respText = resp.bodyAsText()
+                        val ok = com.google.gson.JsonParser.parseString(respText).asJsonObject.get("ok")?.asBoolean ?: false
+                        if (!ok) {
+                            // Retry without markdown
+                            val plain = com.google.gson.JsonObject().apply {
+                                addProperty("chat_id", chatId)
+                                addProperty("text", text)
+                            }
+                            client.post("https://api.telegram.org/bot$token/sendMessage") {
+                                contentType(ContentType.Application.Json)
+                                setBody(plain.toString())
+                            }
+                        }
+                        """{"success":true,"chat_id":$chatId,"length":${text.length}}"""
+                    } catch (e: Exception) {
+                        """{"error":"Failed to send message: ${e.message?.replace("\"", "'")}"}"""
+                    } finally {
+                        client.close()
                     }
                 }
                 "send_telegram_photo" -> {

@@ -356,62 +356,27 @@ Add any custom instructions here. These are appended to the agent's system promp
 - (birthdays, deadlines, recurring events)
 """
 
-    private val SKILLS_MD = """# Skills — Reusable Automation Recipes
+    private val SKILLS_MD = """# Skills — Learned Automation Patterns
 
-## How Skills Work
-Skills are step-by-step recipes using your existing tools. When a user request matches
-a skill's trigger, follow the steps exactly. You can also CREATE new skills by saving
-them here after successfully completing a novel multi-step task.
+## About
+Skills are reusable patterns I've learned from completing tasks.
+When a user request matches a saved skill, I follow its steps.
+After completing a novel multi-step task successfully, I save it here.
 
-## Skill Format
-Each skill has: name, trigger (when to use), inputs, and steps (tool calls in order).
-For complex skills (>10 steps), use spawn_sub_agent to run in background.
+## Format
+```
+### skill_name
+Trigger: when to use this
+Steps: [ordered tool calls]
+Gateway: where to send results (chat/telegram/file/etc)
+```
 
----
-
-### app_to_telegram
-**Trigger:** user asks to open an app, do something in it, and send result to Telegram
-**Inputs:** app (package name or common name), action (what to do), query (search term etc)
-**Steps:**
-1. android_open_app(packageName) — open the target app
-2. find_element("search") or android_read_screen — find the interaction point
-3. android_tap(x, y) — tap search/input field
-4. android_type_text(query) — type the search query
-5. find_element(target) → android_tap — tap the result
-6. take_screenshot — capture the screen
-7. send_telegram_photo(file_path, caption) — send to Telegram
-**Notes:** If task needs >15 steps, spawn_sub_agent immediately. Always take_screenshot AFTER the target content is visible.
-
-### web_search_report
-**Trigger:** user asks to search something and report back
-**Inputs:** query (search term)
-**Steps:**
-1. web_search(query) — get search results
-2. web_scrape(top_result_url) — read the most relevant page
-3. Summarize findings in response
-**Notes:** If user wants visual proof, add take_screenshot after opening Chrome.
-
-### save_user_info
-**Trigger:** user shares personal info (name, job, preference, birthday, etc)
-**Inputs:** info (what was learned)
-**Steps:**
-1. read_workspace_file("USER.md") — get current profile
-2. Merge new info into appropriate section
-3. update_workspace_file("USER.md", merged_content) — save
-**Notes:** Do this AUTOMATICALLY. Don't ask permission.
-
-### create_skill
-**Trigger:** user says "save this as a skill", "bikin skill", "jadiin skill"
-**Inputs:** name, trigger description, steps (from recent successful task)
-**Steps:**
-1. read_workspace_file("skills.md") — get current skills
-2. Format new skill with name, trigger, inputs, steps
-3. Append to skills list
-4. update_workspace_file("skills.md", updated_content) — save
-**Notes:** Use the actual tool calls from the successful task as steps.
+## Saved Skills
+(none yet — I'll add skills as I learn new patterns)
 
 ---
-(Add more skills below as you learn new patterns)
+*To add a skill: tell me "save this as a skill" after I complete a task*
+*To see skills: ask "apa aja skill mu?"*
 """
 
     private val BOOTSTRAP_MD = """# Bootstrap

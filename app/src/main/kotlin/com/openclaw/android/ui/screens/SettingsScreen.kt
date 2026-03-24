@@ -31,11 +31,11 @@ fun SettingsScreen(
     onStartService: () -> Unit = {},
     onStopService: () -> Unit = {}
 ) {
-    var activeProvider by remember { mutableStateOf("llm_minimax") }
-    var anthropicKey by remember { mutableStateOf("") }
-    var openaiKey by remember { mutableStateOf("") }
-    var minimaxKey by remember { mutableStateOf("") }
-    var openrouterKey by remember { mutableStateOf("") }
+    var activeProvider by remember { mutableStateOf(com.openclaw.android.ai.AgentConfig.activeProvider) }
+    var anthropicKey by remember { mutableStateOf(com.openclaw.android.ai.AgentConfig.anthropicKey) }
+    var openaiKey by remember { mutableStateOf(com.openclaw.android.ai.AgentConfig.openaiKey) }
+    var minimaxKey by remember { mutableStateOf(com.openclaw.android.ai.AgentConfig.minimaxKey) }
+    var openrouterKey by remember { mutableStateOf(com.openclaw.android.ai.AgentConfig.openrouterKey) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(BG).padding(horizontal = 16.dp),
@@ -70,19 +70,19 @@ fun SettingsScreen(
         item { SectionLabel("ACTIVE LLM PROVIDER") }
         item {
             val providers = listOf(
-                "llm_anthropic" to "Anthropic Claude",
-                "llm_openai" to "OpenAI GPT",
-                "llm_minimax" to "MiniMax M2.5",
-                "llm_google" to "Google Gemini",
-                "llm_openrouter" to "OpenRouter",
-                "llm_ollama" to "Ollama (Local)",
-                "llm_custom" to "Custom API"
+                "anthropic" to "Anthropic Claude",
+                "openai" to "OpenAI GPT",
+                "minimax" to "MiniMax M2.5",
+                "google" to "Google Gemini",
+                "openrouter" to "OpenRouter",
+                "ollama" to "Ollama (Local)",
+                "custom" to "Custom API"
             )
             Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(10.dp)) {
                 Column(modifier = Modifier.padding(8.dp)) {
                     providers.forEach { (id, name) ->
                         Row(
-                            modifier = Modifier.fillMaxWidth().clickable { activeProvider = id }.padding(horizontal = 12.dp, vertical = 8.dp),
+                            modifier = Modifier.fillMaxWidth().clickable { activeProvider = id; com.openclaw.android.ai.AgentConfig.activeProvider = id }.padding(horizontal = 12.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(selected = activeProvider == id, onClick = { activeProvider = id },
@@ -100,10 +100,10 @@ fun SettingsScreen(
         item {
             Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(10.dp)) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    ApiKeyField("Anthropic API Key", anthropicKey) { anthropicKey = it }
-                    ApiKeyField("OpenAI API Key", openaiKey) { openaiKey = it }
-                    ApiKeyField("MiniMax API Key", minimaxKey) { minimaxKey = it }
-                    ApiKeyField("OpenRouter API Key", openrouterKey) { openrouterKey = it }
+                    ApiKeyField("Anthropic API Key", anthropicKey) { anthropicKey = it; com.openclaw.android.ai.AgentConfig.anthropicKey = it }
+                    ApiKeyField("OpenAI API Key", openaiKey) { openaiKey = it; com.openclaw.android.ai.AgentConfig.openaiKey = it }
+                    ApiKeyField("MiniMax API Key", minimaxKey) { minimaxKey = it; com.openclaw.android.ai.AgentConfig.minimaxKey = it }
+                    ApiKeyField("OpenRouter API Key", openrouterKey) { openrouterKey = it; com.openclaw.android.ai.AgentConfig.openrouterKey = it }
                 }
             }
         }

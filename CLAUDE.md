@@ -88,20 +88,30 @@ POST /agent/chat                  # {message, provider, apiKey, model, baseUrl} 
 - POST /agent/chat endpoint accepts {message, provider, apiKey, model, baseUrl}
 - Max 10 tool-calling steps per agent run
 
-## LLM Tools (30 total)
-### Android Device Tools (8)
-android_read_screen, android_tap, android_swipe, android_type_text,
-android_press_back, android_press_home, android_open_app, android_read_notifications
+## LLM Tools (41 total)
+### Android Device Tools (18)
+android_read_screen, find_element, read_region,
+android_tap, android_long_press, android_swipe, android_type_text,
+android_press_back, android_press_home, android_press_enter,
+android_open_app, android_launch_url, android_scroll_to_text,
+android_media_control (play/pause/next/prev/stop), android_volume (set/up/down/mute),
+android_set_brightness, android_get_clipboard, android_set_clipboard,
+android_wifi_toggle, android_read_notifications,
+take_screenshot, shizuku_command
 
-### Utility Tools (15)
+### Utility Tools (17)
 run_shell_command, web_scrape, web_search, calculator,
 read_file, write_file, list_files, generate_csv, generate_xlsx, generate_pdf,
 http_request, spawn_sub_agent, list_sub_agents,
-read_workspace_file, update_workspace_file
+read_workspace_file, update_workspace_file,
+send_telegram_message, send_telegram_photo
 
 ### Service Tools (7) — require API tokens
 github_api, vercel_api, supabase_query, google_workspace, authenticated_api,
 ssh_execute, postgres_query (via SSH tunnel)
+
+### Python Runtime (3)
+install_python, run_python, pip_install
 
 ## File System
 - Agent config files: `filesDir/agent_config/` (identity.md, memory.md, system_prompt.md, skills.md)

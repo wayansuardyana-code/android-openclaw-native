@@ -36,8 +36,13 @@ app/src/main/kotlin/com/openclaw/android/
 │   ├── ScreenReaderService.kt # AccessibilityService (eyes + hands)
 │   ├── NotificationReaderService.kt
 │   └── BootReceiver.kt        # Auto-start on boot
+├── ai/
+│   ├── LlmClient.kt          # Unified LLM client (Anthropic/OpenAI/Google/custom)
+│   ├── AgentLoop.kt           # AI agent loop (message → LLM → tool call → loop)
+│   ├── AndroidTools.kt        # 8 device control tools for LLM function calling
+│   └── ToolDef.kt             # Tool definition schema
 ├── bridge/
-│   └── AndroidBridgeServer.kt # Ktor HTTP API (15 endpoints)
+│   └── AndroidBridgeServer.kt # Ktor HTTP API (16 endpoints, includes /agent/chat)
 ├── data/
 │   ├── AppDatabase.kt         # Room database
 │   ├── ConnectorRegistry.kt   # Default connector definitions (28 connectors)
@@ -74,8 +79,15 @@ POST /android/volume           # {level, stream}
 GET  /android/contacts
 ```
 
+## AI Agent System
+- LlmClient supports Anthropic, OpenAI, Google, MiniMax, OpenRouter, Ollama, custom APIs
+- AgentLoop implements tool-calling loop: user msg → LLM → tool call → execute → loop → final response
+- 8 Android tools exposed to LLM: read_screen, tap, swipe, type_text, press_back, press_home, open_app, read_notifications
+- POST /agent/chat endpoint accepts {message, provider, apiKey, model, baseUrl}
+- Max 10 tool-calling steps per agent run
+
 ## Development Notes
-- PostgreSQL JDBC removed (Android compat issue) — use HTTP proxy instead
+- PostgreSQL JDBC removed (Android compat issue with MethodHandle on API <26) — use HTTP proxy instead
 - Shizuku integration declared but not yet connected
-- nodejs-mobile integration planned for Phase 1b
+- nodejs-mobile integration optional — Kotlin-native AI agent works standalone
 - APK served via `python3 -m http.server 8899` on VPS for download

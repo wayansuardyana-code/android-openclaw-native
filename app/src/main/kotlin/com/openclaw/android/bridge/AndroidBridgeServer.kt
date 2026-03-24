@@ -6,6 +6,8 @@ import android.media.AudioManager
 import android.net.wifi.WifiManager
 import android.os.BatteryManager
 import android.provider.ContactsContract
+import com.openclaw.android.ai.AgentLoop
+import com.openclaw.android.ai.LlmClient
 import com.openclaw.android.service.NotificationReaderService
 import com.openclaw.android.service.ScreenReaderService
 import com.openclaw.android.util.ServiceState
@@ -51,6 +53,8 @@ class AndroidBridgeServer(private val context: Context) {
     private var server: NettyApplicationEngine? = null
     private val gson = Gson()
     private val port = 18790
+    private val llmClient = LlmClient()
+    private val agentLoop = AgentLoop(llmClient)
 
     fun start() {
         val appContext = context
@@ -251,6 +255,34 @@ class AndroidBridgeServer(private val context: Context) {
                         return@get
                     }
                     call.respond(contacts)
+                }
+
+                // ── AI Agent Chat ───────────────────────────
+
+                post("/agent/chat") {
+                    val body = call.receive<Map<String, String>>()
+                    val message = body["message"] ?: ""
+                    val provider = body["provider"] ?: "anthropic"
+                    val apiKey = body["apiKey"] ?: ""
+                    val model = body["model"] ?: "claude-sonnet-4-6"
+                    val baseUrl = body["baseUrl"] ?: "https://api.anthropic.com"
+
+                    if (message.isBlank()) {
+                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "message is required"))
+                        return@post
+                    }
+
+                    val config = LlmClient.Config(provider, apiKey, model, baseUrl)
+                    val systemPrompt = """You are OpenClaw, an AI assistant running natively on an Android device.
+You have direct control over the device through tools. You can read the screen, tap buttons, type text, open apps, and read notifications.
+When the user asks you to do something on their phone, use the available tools to accomplish it.
+Be concise and action-oriented. Execute tasks, don't just describe how to do them."""
+
+                    val response = agentLoop.run(config, message, systemPrompt)
+                    call.respond(mapOf(
+                        "response" to response,
+                        "tokensUsed" to agentLoop.totalTokens.value
+                    ))
                 }
             }
         }.start(wait = false)

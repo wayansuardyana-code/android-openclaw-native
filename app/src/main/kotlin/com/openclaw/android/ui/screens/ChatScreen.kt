@@ -34,8 +34,11 @@ import androidx.core.content.ContextCompat
 import com.openclaw.android.ai.AgentConfig
 import com.openclaw.android.ai.AgentLoop
 import com.openclaw.android.ai.LlmClient
+import com.openclaw.android.service.ScreenReaderService
+import com.openclaw.android.util.ServiceState
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 
 private val BG = Color(0xFF0D1117)
@@ -155,11 +158,46 @@ fun ChatScreen() {
         }
     }
 
-    // Camera
-    var photoUri by remember { mutableStateOf<Uri?>(null) }
-    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
-        if (success && photoUri != null) {
-            attachedFile = "photo.jpg" to "[Photo taken: ${photoUri}]"
+    // Camera — uses ScreenReaderService.captureScreenshot() instead of ACTION_IMAGE_CAPTURE.
+    // This avoids FileProvider configuration requirements and is more useful for the agent
+    // (captures the current screen rather than opening the device camera).
+    var isTakingScreenshot by remember { mutableStateOf(false) }
+
+    fun takeScreenshotAsAttachment() {
+        val reader = ScreenReaderService.instance
+        if (reader == null) {
+            ServiceState.addLog("[Camera] ScreenReaderService not connected — enable Accessibility Service first")
+            android.widget.Toast.makeText(context, "Accessibility Service not enabled. Enable it in Settings.", android.widget.Toast.LENGTH_LONG).show()
+            return
+        }
+        isTakingScreenshot = true
+        ServiceState.addLog("[Camera] Capturing screenshot for chat attachment")
+        scope.launch(Dispatchers.IO) {
+            try {
+                val dir = File(context.filesDir, "screenshots")
+                dir.mkdirs()
+                val file = File(dir, "chat_screenshot_${System.currentTimeMillis()}.png")
+                val result = reader.captureScreenshot(file.absolutePath)
+                withContext(Dispatchers.Main) {
+                    if (file.exists() && file.length() > 0) {
+                        // Read first 200 bytes as base64 header hint; store path as context for agent
+                        val sizeKb = file.length() / 1024
+                        attachedFile = "screenshot.png" to "[Screenshot captured: ${file.absolutePath} (${sizeKb}KB). The agent can read this file using read_file or send it via send_telegram_photo.]"
+                        ServiceState.addLog("[Camera] Screenshot saved: ${file.absolutePath} (${sizeKb}KB)")
+                        android.widget.Toast.makeText(context, "Screenshot captured (${sizeKb}KB)", android.widget.Toast.LENGTH_SHORT).show()
+                    } else {
+                        ServiceState.addLog("[Camera] Screenshot failed — result: $result")
+                        android.widget.Toast.makeText(context, "Screenshot failed. Android 11+ required.", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                ServiceState.addLog("[Camera] Screenshot exception: ${e.message}")
+                withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(context, "Screenshot error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            } finally {
+                withContext(Dispatchers.Main) { isTakingScreenshot = false }
+            }
         }
     }
 
@@ -168,40 +206,109 @@ fun ChatScreen() {
     var hasMicPermission by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) }
     val micPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         hasMicPermission = granted
+        if (granted) {
+            ServiceState.addLog("[Mic] RECORD_AUDIO permission granted")
+        } else {
+            ServiceState.addLog("[Mic] RECORD_AUDIO permission denied")
+        }
     }
-    val speechRecognizer = remember {
-        try { if (SpeechRecognizer.isRecognitionAvailable(context)) SpeechRecognizer.createSpeechRecognizer(context) else null } catch (_: Exception) { null }
+
+    // SpeechRecognizer must be created and destroyed on the main thread.
+    // Use a var + DisposableEffect so it is properly released when the composable leaves composition.
+    var speechRecognizer by remember { mutableStateOf<SpeechRecognizer?>(null) }
+    DisposableEffect(Unit) {
+        val available = try { SpeechRecognizer.isRecognitionAvailable(context) } catch (_: Exception) { false }
+        if (available) {
+            speechRecognizer = try {
+                SpeechRecognizer.createSpeechRecognizer(context).also {
+                    ServiceState.addLog("[Mic] SpeechRecognizer created")
+                }
+            } catch (e: Exception) {
+                ServiceState.addLog("[Mic] SpeechRecognizer creation failed: ${e.message}")
+                null
+            }
+        } else {
+            ServiceState.addLog("[Mic] SpeechRecognizer not available on this device")
+        }
+        onDispose {
+            try {
+                speechRecognizer?.destroy()
+                ServiceState.addLog("[Mic] SpeechRecognizer destroyed")
+            } catch (_: Exception) {}
+            speechRecognizer = null
+        }
     }
 
     fun startListening() {
-        if (!hasMicPermission) { micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO); return }
-        if (speechRecognizer == null) { android.widget.Toast.makeText(context, "Speech recognition not available on this device", android.widget.Toast.LENGTH_SHORT).show(); return }
+        if (!hasMicPermission) {
+            ServiceState.addLog("[Mic] No RECORD_AUDIO permission — requesting")
+            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            return
+        }
+        val recognizer = speechRecognizer
+        if (recognizer == null) {
+            ServiceState.addLog("[Mic] SpeechRecognizer is null — not available on this device")
+            android.widget.Toast.makeText(context, "Speech recognition not available on this device", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        ServiceState.addLog("[Mic] Starting speech recognition (id-ID)")
         isRecording = true
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "id-ID") // Indonesian + auto-detect
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "id-ID")
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "id-ID")
+            putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, false)
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
         }
-        speechRecognizer.setRecognitionListener(object : RecognitionListener {
-            override fun onResults(results: Bundle?) {
-                val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: ""
-                if (text.isNotBlank()) input = text
-                isRecording = false
-            }
-            override fun onPartialResults(partial: Bundle?) {
-                val text = partial?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: ""
-                if (text.isNotBlank()) input = text
-            }
-            override fun onError(error: Int) { isRecording = false }
-            override fun onReadyForSpeech(p0: Bundle?) {}
-            override fun onBeginningOfSpeech() {}
-            override fun onRmsChanged(p0: Float) {}
-            override fun onBufferReceived(p0: ByteArray?) {}
-            override fun onEndOfSpeech() {}
-            override fun onEvent(p0: Int, p1: Bundle?) {}
-        })
-        speechRecognizer.startListening(intent)
+        try {
+            recognizer.setRecognitionListener(object : RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) {
+                    ServiceState.addLog("[Mic] Ready for speech")
+                }
+                override fun onBeginningOfSpeech() {
+                    ServiceState.addLog("[Mic] Speech started")
+                }
+                override fun onPartialResults(partial: Bundle?) {
+                    val text = partial?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: ""
+                    if (text.isNotBlank()) input = text
+                }
+                override fun onResults(results: Bundle?) {
+                    val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: ""
+                    ServiceState.addLog("[Mic] Final result: \"$text\"")
+                    if (text.isNotBlank()) input = text
+                    isRecording = false
+                }
+                override fun onError(error: Int) {
+                    val msg = when (error) {
+                        SpeechRecognizer.ERROR_AUDIO -> "Audio recording error"
+                        SpeechRecognizer.ERROR_CLIENT -> "Client side error"
+                        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Insufficient permissions"
+                        SpeechRecognizer.ERROR_NETWORK -> "Network error"
+                        SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Network timeout"
+                        SpeechRecognizer.ERROR_NO_MATCH -> "No speech recognized"
+                        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Recognizer busy"
+                        SpeechRecognizer.ERROR_SERVER -> "Server error"
+                        SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech input"
+                        else -> "Unknown error ($error)"
+                    }
+                    ServiceState.addLog("[Mic] Error: $msg")
+                    if (error != SpeechRecognizer.ERROR_NO_MATCH && error != SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
+                        android.widget.Toast.makeText(context, "Mic: $msg", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                    isRecording = false
+                }
+                override fun onRmsChanged(rmsdB: Float) {}
+                override fun onBufferReceived(buffer: ByteArray?) {}
+                override fun onEndOfSpeech() { ServiceState.addLog("[Mic] End of speech") }
+                override fun onEvent(eventType: Int, params: Bundle?) {}
+            })
+            recognizer.startListening(intent)
+        } catch (e: Exception) {
+            ServiceState.addLog("[Mic] startListening exception: ${e.message}")
+            android.widget.Toast.makeText(context, "Mic error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+            isRecording = false
+        }
     }
 
     // Slash menu: derive from input state directly (no LaunchedEffect)
@@ -466,22 +573,30 @@ ${if (customPrompt.isNotBlank()) "\n--- CUSTOM INSTRUCTIONS ---\n$customPrompt" 
             IconButton(onClick = { filePicker.launch("*/*") }, modifier = Modifier.size(30.dp)) {
                 Icon(Icons.Default.AttachFile, "Attach", tint = TEXT2, modifier = Modifier.size(16.dp))
             }
-            // Camera button
-            IconButton(onClick = {
-                try {
-                    val photoFile = File(com.openclaw.android.OpenClawApplication.instance.getExternalFilesDir(null), "photo_${System.currentTimeMillis()}.jpg")
-                    photoUri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", photoFile)
-                    cameraLauncher.launch(photoUri!!)
-                } catch (e: Exception) { android.widget.Toast.makeText(context, "Camera error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show() }
-            }, modifier = Modifier.size(30.dp)) {
-                Icon(Icons.Default.CameraAlt, "Camera", tint = TEXT2, modifier = Modifier.size(16.dp))
+            // Camera button — captures current screen via AccessibilityService screenshot
+            IconButton(
+                onClick = { if (!isTakingScreenshot) takeScreenshotAsAttachment() },
+                modifier = Modifier.size(30.dp),
+                enabled = !isTakingScreenshot
+            ) {
+                Icon(
+                    Icons.Default.CameraAlt,
+                    "Screenshot",
+                    tint = if (isTakingScreenshot) CYAN else TEXT2,
+                    modifier = Modifier.size(16.dp)
+                )
             }
 
             // Mic button
             IconButton(
                 onClick = {
                     if (isRecording) {
-                        speechRecognizer?.stopListening()
+                        try {
+                            speechRecognizer?.stopListening()
+                            ServiceState.addLog("[Mic] Stopped by user")
+                        } catch (e: Exception) {
+                            ServiceState.addLog("[Mic] stopListening error: ${e.message}")
+                        }
                         isRecording = false
                     } else {
                         startListening()

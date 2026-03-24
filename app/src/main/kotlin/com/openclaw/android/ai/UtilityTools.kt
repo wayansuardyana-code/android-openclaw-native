@@ -214,12 +214,24 @@ object UtilityTools {
         ),
         ToolDef(
             name = "send_telegram_photo",
-            description = "Send a photo/image file to the current Telegram chat. Use after take_screenshot to send screenshots to the user. The photo is sent to the last active Telegram chat.",
+            description = "Send a photo/image file (JPG, PNG, etc.) to the current Telegram chat. Use after take_screenshot to send screenshots to the user. For non-image files (XLSX, PDF, CSV, etc.) use send_telegram_document instead.",
             inputSchema = mapOf(
                 "type" to "object",
                 "properties" to mapOf(
                     "file_path" to mapOf("type" to "string", "description" to "Absolute path to the image file to send"),
                     "caption" to mapOf("type" to "string", "description" to "Optional caption for the photo")
+                ),
+                "required" to listOf("file_path")
+            )
+        ),
+        ToolDef(
+            name = "send_telegram_document",
+            description = "Send a file (XLSX, PDF, CSV, TXT, or any file type) to the current Telegram chat as a document. Use this for spreadsheets, reports, and any non-image files. For images/screenshots use send_telegram_photo instead.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "file_path" to mapOf("type" to "string", "description" to "Absolute path to the file to send"),
+                    "caption" to mapOf("type" to "string", "description" to "Optional caption for the document")
                 ),
                 "required" to listOf("file_path")
             )
@@ -350,6 +362,39 @@ object UtilityTools {
                         """{"success":true,"chat_id":$chatId}"""
                     } catch (e: Exception) {
                         """{"error":"Failed to send photo: ${e.message?.replace("\"", "'")}"}"""
+                    } finally {
+                        client.close()
+                    }
+                }
+                "send_telegram_document" -> {
+                    val filePath = args.get("file_path").asString
+                    val caption = args.get("caption")?.asString ?: ""
+                    val file = File(filePath)
+                    if (!file.exists()) return@withContext """{"error":"File not found: $filePath"}"""
+
+                    val token = AgentConfig.getKeyForProvider("telegram")
+                    if (token.isBlank()) return@withContext """{"error":"Telegram bot token not configured"}"""
+
+                    val chatId = com.openclaw.android.service.TelegramBotService.lastChatId
+                    if (chatId == 0L) return@withContext """{"error":"No active Telegram chat"}"""
+
+                    val client = io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp)
+                    try {
+                        client.post("https://api.telegram.org/bot$token/sendDocument") {
+                            setBody(io.ktor.client.request.forms.MultiPartFormDataContent(
+                                io.ktor.client.request.forms.formData {
+                                    append("chat_id", chatId.toString())
+                                    if (caption.isNotBlank()) append("caption", caption)
+                                    append("document", file.readBytes(), io.ktor.http.Headers.build {
+                                        append(io.ktor.http.HttpHeaders.ContentType, "application/octet-stream")
+                                        append(io.ktor.http.HttpHeaders.ContentDisposition, "filename=${file.name}")
+                                    })
+                                }
+                            ))
+                        }
+                        """{"success":true,"chat_id":$chatId,"filename":"${file.name}","size":${file.length()}}"""
+                    } catch (e: Exception) {
+                        """{"error":"Failed to send document: ${e.message?.replace("\"", "'")}"}"""
                     } finally {
                         client.close()
                     }

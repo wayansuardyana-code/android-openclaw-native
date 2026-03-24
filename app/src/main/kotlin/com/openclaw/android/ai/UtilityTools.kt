@@ -123,6 +123,23 @@ object UtilityTools {
                 "required" to listOf("url")
             )
         ),
+        ToolDef(
+            name = "spawn_sub_agent",
+            description = "Spawn a sub-agent to handle a task in the background. Use this for long-running tasks so the chat stays responsive. The sub-agent will notify the user when done.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "task_title" to mapOf("type" to "string", "description" to "Short title for the task (shown in kanban)"),
+                    "prompt" to mapOf("type" to "string", "description" to "Detailed instructions for the sub-agent")
+                ),
+                "required" to listOf("task_title", "prompt")
+            )
+        ),
+        ToolDef(
+            name = "list_sub_agents",
+            description = "List all running and completed sub-agents with their status and results.",
+            inputSchema = mapOf("type" to "object", "properties" to emptyMap<String, Any>())
+        ),
     )
 
     suspend fun executeTool(name: String, args: JsonObject): String {
@@ -138,6 +155,18 @@ object UtilityTools {
                 "list_files" -> listFiles(args.get("path").asString)
                 "generate_csv" -> generateCsv(args)
                 "http_request" -> httpRequest(args)
+                "spawn_sub_agent" -> {
+                    val title = args.get("task_title").asString
+                    val prompt = args.get("prompt").asString
+                    val config = AgentConfig.toLlmConfig()
+                    SubAgentManager.spawn(title, prompt, config)
+                }
+                "list_sub_agents" -> {
+                    val running = SubAgentManager.getRunning()
+                    val completed = SubAgentManager.getCompletedResults()
+                    val gson = Gson()
+                    """{"running":${running.size},"completed":${completed.size},"agents":${gson.toJson(running.map { mapOf("id" to it.id, "title" to it.title, "status" to it.status) } + completed.map { mapOf("id" to it.id, "title" to it.title, "status" to it.status, "result" to (it.result?.take(500) ?: "")) })}}"""
+                }
                 else -> """{"error":"Unknown tool: $name"}"""
             }
         } catch (e: Exception) {

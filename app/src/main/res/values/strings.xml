@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">OpenClaw</string>
+    <string name="accessibility_description">OpenClaw AI assistant needs accessibility access to read and interact with your screen on your behalf.</string>
+    <string name="notification_channel_service">OpenClaw Service</string>
+    <string name="notification_channel_alerts">OpenClaw Alerts</string>
+</resources>

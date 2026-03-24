@@ -23,6 +23,14 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import androidx.core.content.ContextCompat
 import com.openclaw.android.ai.AgentConfig
 import com.openclaw.android.ai.AgentLoop
 import com.openclaw.android.ai.LlmClient
@@ -106,6 +114,43 @@ fun ChatScreen() {
                 attachedFile = "error" to "Failed to read file: ${e.message}"
             }
         }
+    }
+
+    // Voice input
+    var isRecording by remember { mutableStateOf(false) }
+    val hasMicPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+    val speechRecognizer = remember {
+        if (SpeechRecognizer.isRecognitionAvailable(context)) SpeechRecognizer.createSpeechRecognizer(context) else null
+    }
+
+    fun startListening() {
+        if (speechRecognizer == null || !hasMicPermission) return
+        isRecording = true
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "id-ID") // Indonesian + auto-detect
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+        }
+        speechRecognizer.setRecognitionListener(object : RecognitionListener {
+            override fun onResults(results: Bundle?) {
+                val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: ""
+                if (text.isNotBlank()) input = text
+                isRecording = false
+            }
+            override fun onPartialResults(partial: Bundle?) {
+                val text = partial?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: ""
+                if (text.isNotBlank()) input = text
+            }
+            override fun onError(error: Int) { isRecording = false }
+            override fun onReadyForSpeech(p0: Bundle?) {}
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(p0: Float) {}
+            override fun onBufferReceived(p0: ByteArray?) {}
+            override fun onEndOfSpeech() {}
+            override fun onEvent(p0: Int, p1: Bundle?) {}
+        })
+        speechRecognizer.startListening(intent)
     }
 
     // Slash menu: derive from input state directly (no LaunchedEffect)
@@ -331,8 +376,28 @@ ${if (customPrompt.isNotBlank()) "\n--- CUSTOM INSTRUCTIONS ---\n$customPrompt" 
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Attach button
-            IconButton(onClick = { filePicker.launch("*/*") }, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Default.AttachFile, "Attach", tint = TEXT2, modifier = Modifier.size(20.dp))
+            IconButton(onClick = { filePicker.launch("*/*") }, modifier = Modifier.size(34.dp)) {
+                Icon(Icons.Default.AttachFile, "Attach", tint = TEXT2, modifier = Modifier.size(18.dp))
+            }
+
+            // Mic button
+            IconButton(
+                onClick = {
+                    if (isRecording) {
+                        speechRecognizer?.stopListening()
+                        isRecording = false
+                    } else {
+                        startListening()
+                    }
+                },
+                modifier = Modifier.size(34.dp)
+            ) {
+                Icon(
+                    Icons.Default.Mic,
+                    "Voice",
+                    tint = if (isRecording) RED else TEXT2,
+                    modifier = Modifier.size(18.dp)
+                )
             }
 
             OutlinedTextField(

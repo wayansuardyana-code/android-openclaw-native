@@ -147,14 +147,79 @@ Listed below as upcoming phases.
 
 ## Bugs to Fix
 
-| Bug | Priority | Notes |
-|-----|----------|-------|
-| Camera button in chat doesn't work | HIGH | Intent not firing or permission issue |
-| Microphone button in chat doesn't work | HIGH | SpeechRecognizer not triggering |
-| `send_telegram_document` missing | MEDIUM | Can only send photos, not files (XLSX/PDF) |
+| Bug | Priority | Status |
+|-----|----------|--------|
+| Camera button in chat | HIGH | FIXED v2.0.1 — uses captureScreenshot() |
+| Microphone button in chat | HIGH | FIXED v2.0.1 — SpeechRecognizer lifecycle fixed |
+| `send_telegram_document` missing | MEDIUM | FIXED v2.0.1 — new tool added |
 | Python install fails (curl not found) | LOW | Need Ktor-based download fallback |
-| Accessibility auto-disables after update | WONTFIX | Android OS behavior — manual re-enable |
-| Shizuku not installable on ADVAN X1 | WONTFIX | Android 14 compat issue |
+| Accessibility auto-disables after update | WONTFIX | Android OS behavior |
+| Shizuku not installable on ADVAN X1 | WONTFIX | Android 14 compat |
+
+---
+
+## Test Scenarios (Wayan to test on device)
+
+### Test 1: NVIDIA Financial Report
+```
+Prompt: "Cari laporan keuangan NVIDIA terbaru, baca PDF-nya, summary, terus bikin XLSX
+         dengan beberapa sheet: summary financial statements + insights"
+Expected flow:
+1. web_search("NVIDIA annual report 2025 PDF") or web_scrape(nvidia.com/ir)
+2. Download/read PDF content (web_scrape or http_request)
+3. LLM reasoning + summary
+4. generate_xlsx with multiple sheets
+5. send_telegram_document to send XLSX to Telegram
+Tools needed: web_search, web_scrape, http_request, generate_xlsx, send_telegram_document
+```
+
+### Test 2: AI Research Scraping → PPT
+```
+Prompt: "Riset perkembangan AI terbaru, scrape beberapa sumber, summary, bikin PPT"
+Expected flow:
+1. web_search("latest AI developments 2026")
+2. web_scrape top 3-5 results
+3. LLM summarizes findings
+4. generate_pdf (PPT-like) or write_file (HTML slides)
+5. send_telegram_document
+Tools needed: web_search, web_scrape, generate_pdf/write_file, send_telegram_document
+Note: PPT generation is limited — generate_pdf for basic, write_file(html) for visual slides
+```
+
+### Test 3: Vercel API Connection
+```
+Setup: Add Vercel token in Settings → Services → "+" → Vercel
+Prompt: "List my Vercel projects"
+Expected: vercel_api tool calls Vercel REST API with Bearer token
+```
+
+### Test 4: Supabase Connection
+```
+Setup: Add Supabase URL + anon key in Settings → Services
+Prompt: "Query my Supabase database, list all tables"
+Expected: supabase_query tool calls PostgREST API
+```
+
+---
+
+## Service Connections (to configure)
+
+| Service | Status | How to Connect |
+|---------|--------|---------------|
+| Telegram Bot | WORKING | Settings → "+" → telegram → paste bot token |
+| Vercel | READY (untested) | Settings → "+" → vercel → paste API token |
+| Supabase | READY (untested) | Settings → "+" → supabase → paste anon key + URL |
+| GitHub | READY (untested) | Settings → "+" → github → paste PAT |
+| Google Workspace | BLOCKED | Waiting for OAuth2 credentials from Wayan |
+| Context7 | NOT YET | Need to add as default API connector |
+| ClawhHub | NOT YET | Need to add as default API connector |
+| SSH (VPS) | READY | Settings → "+" → ssh → host/user/password |
+
+---
+
+## Public APIs to Integrate
+
+(Research in progress — will be populated with free APIs for weather, news, finance, etc.)
 
 ---
 
@@ -171,3 +236,4 @@ Listed below as upcoming phases.
 - SoM (Set-of-Mark) overlay most precise for tap targeting
 - Exploration phase builds knowledge before executing tasks
 - Action history prevents repeating failed actions
+- Key repos: MobileAgent (8.3k★), droidrun (8k★), AppAgent (6.6k★)

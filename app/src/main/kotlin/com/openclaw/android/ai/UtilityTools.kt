@@ -177,15 +177,21 @@ object UtilityTools {
         ),
         ToolDef(
             name = "generate_xlsx",
-            description = "Generate an Excel (.xlsx) file with headers and rows. Saved to app documents folder.",
+            description = "Generate an Excel (.xlsx) file. Supports MULTIPLE SHEETS. For single sheet: use headers+rows. For multi-sheet: use 'sheets' array. Saved to Documents/OpenClaw/.",
             inputSchema = mapOf(
                 "type" to "object",
                 "properties" to mapOf(
-                    "filename" to mapOf("type" to "string", "description" to "Output filename ending in .xlsx (saved to Documents/OpenClaw/)"),
-                    "headers" to mapOf("type" to "array", "items" to mapOf("type" to "string"), "description" to "Column headers"),
-                    "rows" to mapOf("type" to "array", "items" to mapOf("type" to "array", "items" to mapOf("type" to "string")), "description" to "Data rows, each an array of cell values")
+                    "filename" to mapOf("type" to "string", "description" to "Output filename ending in .xlsx"),
+                    "headers" to mapOf("type" to "array", "items" to mapOf("type" to "string"), "description" to "Column headers (single sheet mode)"),
+                    "rows" to mapOf("type" to "array", "items" to mapOf("type" to "array", "items" to mapOf("type" to "string")), "description" to "Data rows (single sheet mode)"),
+                    "sheets" to mapOf("type" to "array", "description" to "Multi-sheet mode: array of {name, headers, rows} objects. Overrides headers/rows if present.",
+                        "items" to mapOf("type" to "object", "properties" to mapOf(
+                            "name" to mapOf("type" to "string"),
+                            "headers" to mapOf("type" to "array", "items" to mapOf("type" to "string")),
+                            "rows" to mapOf("type" to "array", "items" to mapOf("type" to "array", "items" to mapOf("type" to "string")))
+                        )))
                 ),
-                "required" to listOf("filename", "headers", "rows")
+                "required" to listOf("filename")
             )
         ),
         ToolDef(
@@ -580,33 +586,42 @@ object UtilityTools {
 
     private fun generateXlsx(args: JsonObject): String {
         val filename = args.get("filename").asString
-        val headers = args.getAsJsonArray("headers").map { it.asString }
-        val rows = args.getAsJsonArray("rows").map { row ->
-            row.asJsonArray.map { it.asString }
-        }
-
         val dir = File(OpenClawApplication.instance.getExternalFilesDir(null), "documents")
         dir.mkdirs()
         val file = File(dir, if (filename.endsWith(".xlsx")) filename else "$filename.xlsx")
 
+        // Build sheet data — either from "sheets" array (multi) or "headers"+"rows" (single)
+        data class SheetData(val name: String, val headers: List<String>, val rows: List<List<String>>)
+        val sheetList = mutableListOf<SheetData>()
+
+        val sheetsArray = args.getAsJsonArray("sheets")
+        if (sheetsArray != null && sheetsArray.size() > 0) {
+            // Multi-sheet mode
+            for (s in sheetsArray) {
+                val obj = s.asJsonObject
+                val name = obj.get("name")?.asString ?: "Sheet${sheetList.size + 1}"
+                val h = obj.getAsJsonArray("headers")?.map { it.asString } ?: emptyList()
+                val r = obj.getAsJsonArray("rows")?.map { row -> row.asJsonArray.map { it.asString } } ?: emptyList()
+                sheetList.add(SheetData(name, h, r))
+            }
+        } else {
+            // Single sheet mode (backward compatible)
+            val headers = args.getAsJsonArray("headers")?.map { it.asString } ?: emptyList()
+            val rows = args.getAsJsonArray("rows")?.map { row -> row.asJsonArray.map { it.asString } } ?: emptyList()
+            sheetList.add(SheetData("Sheet1", headers, rows))
+        }
+
         FileOutputStream(file).use { fos ->
             val wb = Workbook(fos, "OpenClaw", "1.0")
-            val ws = wb.newWorksheet("Sheet1")
 
-            // Write headers (row 0)
-            headers.forEachIndexed { col, header ->
-                ws.value(0, col, header)
-            }
-
-            // Write data rows
-            rows.forEachIndexed { rowIdx, row ->
-                row.forEachIndexed { col, cell ->
-                    // Try to write as number if possible, otherwise as string
-                    val num = cell.toDoubleOrNull()
-                    if (num != null) {
-                        ws.value(rowIdx + 1, col, num)
-                    } else {
-                        ws.value(rowIdx + 1, col, cell)
+            for (sheet in sheetList) {
+                val ws = wb.newWorksheet(sheet.name)
+                sheet.headers.forEachIndexed { col, header -> ws.value(0, col, header) }
+                sheet.rows.forEachIndexed { rowIdx, row ->
+                    row.forEachIndexed { col, cell ->
+                        val num = cell.toDoubleOrNull()
+                        if (num != null) ws.value(rowIdx + 1, col, num)
+                        else ws.value(rowIdx + 1, col, cell)
                     }
                 }
             }
@@ -614,7 +629,8 @@ object UtilityTools {
             wb.finish()
         }
 
-        return """{"success":true,"path":"${file.absolutePath}","rows":${rows.size},"columns":${headers.size}}"""
+        val totalRows = sheetList.sumOf { it.rows.size }
+        return """{"success":true,"path":"${file.absolutePath}","sheets":${sheetList.size},"total_rows":$totalRows}"""
     }
 
     private fun generatePdf(args: JsonObject): String {

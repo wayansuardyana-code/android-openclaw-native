@@ -16,6 +16,9 @@
     <!-- Boot (auto-start) -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- Install APK updates -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <!-- Wake lock (prevent CPU sleep during operations) -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 

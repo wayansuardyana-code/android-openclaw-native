@@ -20,7 +20,15 @@ import kotlinx.coroutines.withContext
  * Anthropic uses its native /v1/messages API.
  */
 class LlmClient {
-    private val client = HttpClient(OkHttp)
+    private val client = HttpClient(OkHttp) {
+        engine {
+            config {
+                connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                readTimeout(120, java.util.concurrent.TimeUnit.SECONDS)  // LLM can be slow with big context
+                writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            }
+        }
+    }
     private val gson = Gson()
 
     data class Config(

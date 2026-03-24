@@ -90,7 +90,9 @@ object AndroidTools {
                 "android_read_screen" -> {
                     val reader = ScreenReaderService.instance
                         ?: return """{"error":"Accessibility service not enabled"}"""
-                    reader.readScreen().toString()
+                    val tree = reader.readScreen().toString()
+                    // Truncate to prevent LLM timeout on massive accessibility trees
+                    if (tree.length > 8000) tree.take(8000) + "...(truncated, ${tree.length} total chars)" else tree
                 }
                 "android_tap" -> {
                     val reader = ScreenReaderService.instance

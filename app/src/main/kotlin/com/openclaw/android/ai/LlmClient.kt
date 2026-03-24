@@ -91,10 +91,13 @@ class LlmClient {
         }
 
         val respText = response.bodyAsText()
-        val respJson = gson.fromJson(respText, JsonObject::class.java)
+        if (respText.isBlank()) return LlmResponse(content = "", error = "Empty response from API")
+        if (!respText.trimStart().startsWith("{")) return LlmResponse(content = "", error = "Not JSON: ${respText.take(150)}")
+        val respJson = try { gson.fromJson(respText, JsonObject::class.java) } catch (e: Exception) { return LlmResponse(content = "", error = "Parse error: ${e.message?.take(100)}") }
 
         if (respJson.has("error")) {
-            val err = respJson.getAsJsonObject("error").get("message").asString
+            val errObj = respJson.get("error")
+            val err = if (errObj.isJsonObject) errObj.asJsonObject.get("message")?.asString ?: errObj.toString() else errObj.toString()
             return LlmResponse(content = "", error = err)
         }
 
@@ -172,10 +175,13 @@ class LlmClient {
         }
 
         val respText = response.bodyAsText()
-        val respJson = gson.fromJson(respText, JsonObject::class.java)
+        if (respText.isBlank()) return LlmResponse(content = "", error = "Empty response from API")
+        if (!respText.trimStart().startsWith("{")) return LlmResponse(content = "", error = "Not JSON: ${respText.take(150)}")
+        val respJson = try { gson.fromJson(respText, JsonObject::class.java) } catch (e: Exception) { return LlmResponse(content = "", error = "Parse error: ${e.message?.take(100)}") }
 
         if (respJson.has("error")) {
-            val err = respJson.getAsJsonObject("error").get("message").asString
+            val errObj = respJson.get("error")
+            val err = if (errObj.isJsonObject) errObj.asJsonObject.get("message")?.asString ?: errObj.toString() else errObj.toString()
             return LlmResponse(content = "", error = err)
         }
 

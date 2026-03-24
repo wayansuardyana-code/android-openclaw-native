@@ -425,6 +425,7 @@ ${if (customPrompt.isNotBlank()) "\n--- CUSTOM INSTRUCTIONS ---\n$customPrompt" 
 
 @Composable
 fun MessageBubble(msg: ChatMessage) {
+    val context = LocalContext.current
     val isUser = msg.role == "user"
     val isSystem = msg.role == "system"
     val bubbleColor = when {
@@ -452,7 +453,11 @@ fun MessageBubble(msg: ChatMessage) {
         Card(
             colors = CardDefaults.cardColors(containerColor = bubbleColor),
             shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp, bottomStart = if (isUser) 12.dp else 4.dp, bottomEnd = if (isUser) 4.dp else 12.dp),
-            modifier = Modifier.widthIn(max = 320.dp)
+            modifier = Modifier.widthIn(max = 320.dp).clickable {
+                val clip = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                clip.setPrimaryClip(android.content.ClipData.newPlainText("msg", msg.content))
+                android.widget.Toast.makeText(context, "Copied!", android.widget.Toast.LENGTH_SHORT).show()
+            }
         ) {
             Column(modifier = Modifier.padding(10.dp)) {
                 if (label != null) {

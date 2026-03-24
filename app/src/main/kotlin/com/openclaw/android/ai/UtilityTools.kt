@@ -1,5 +1,6 @@
 package com.openclaw.android.ai
 
+import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.openclaw.android.OpenClawApplication
 import com.openclaw.android.util.ServiceState
@@ -146,7 +147,6 @@ object UtilityTools {
     }
 
     private fun runShell(command: String): String {
-        // Safety: block obviously dangerous commands
         val blocked = listOf("rm -rf /", "mkfs", "dd if=", ":(){ :|:&", "format")
         if (blocked.any { command.contains(it) }) {
             return """{"error":"Command blocked for safety"}"""
@@ -158,10 +158,16 @@ object UtilityTools {
 
         val output = BufferedReader(InputStreamReader(process.inputStream))
             .readText()
-            .take(4000) // limit output
+            .take(4000)
 
-        val exitCode = process.waitFor()
-        return """{"exitCode":$exitCode,"output":"${output.replace("\"", "\\\"").replace("\n", "\\n")}"}"""
+        val finished = process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS)
+        if (!finished) {
+            process.destroyForcibly()
+            return """{"error":"Command timed out after 30 seconds"}"""
+        }
+        val exitCode = process.exitValue()
+        val escaped = com.google.gson.Gson().toJson(output) // proper JSON escaping
+        return """{"exitCode":$exitCode,"output":$escaped}"""
     }
 
     private fun webScrape(url: String, selector: String?): String {

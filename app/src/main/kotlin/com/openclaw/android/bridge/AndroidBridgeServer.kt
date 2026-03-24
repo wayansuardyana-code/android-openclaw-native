@@ -85,8 +85,8 @@ class AndroidBridgeServer(private val context: Context) {
 
                 post("/android/tap") {
                     val body = call.receive<Map<String, Any>>()
-                    val x = (body["x"] as Number).toFloat()
-                    val y = (body["y"] as Number).toFloat()
+                    val x = (body["x"] as? Number)?.toFloat() ?: run { call.respond(HttpStatusCode.BadRequest, mapOf("error" to "missing x")); return@post }
+                    val y = (body["y"] as? Number)?.toFloat() ?: run { call.respond(HttpStatusCode.BadRequest, mapOf("error" to "missing y")); return@post }
                     val reader = ScreenReaderService.instance
                     if (reader == null) {
                         call.respond(HttpStatusCode.ServiceUnavailable,
@@ -101,10 +101,10 @@ class AndroidBridgeServer(private val context: Context) {
 
                 post("/android/swipe") {
                     val body = call.receive<Map<String, Any>>()
-                    val x1 = (body["x1"] as Number).toFloat()
-                    val y1 = (body["y1"] as Number).toFloat()
-                    val x2 = (body["x2"] as Number).toFloat()
-                    val y2 = (body["y2"] as Number).toFloat()
+                    val x1 = (body["x1"] as? Number)?.toFloat() ?: run { call.respond(HttpStatusCode.BadRequest, mapOf("error" to "missing x1")); return@post }
+                    val y1 = (body["y1"] as? Number)?.toFloat() ?: run { call.respond(HttpStatusCode.BadRequest, mapOf("error" to "missing y1")); return@post }
+                    val x2 = (body["x2"] as? Number)?.toFloat() ?: run { call.respond(HttpStatusCode.BadRequest, mapOf("error" to "missing x2")); return@post }
+                    val y2 = (body["y2"] as? Number)?.toFloat() ?: run { call.respond(HttpStatusCode.BadRequest, mapOf("error" to "missing y2")); return@post }
                     val duration = (body["duration"] as? Number)?.toLong() ?: 300L
                     val reader = ScreenReaderService.instance
                     if (reader == null) {
@@ -209,7 +209,7 @@ class AndroidBridgeServer(private val context: Context) {
 
                 post("/android/volume") {
                     val body = call.receive<Map<String, Any>>()
-                    val level = (body["level"] as Number).toInt()
+                    val level = (body["level"] as? Number)?.toInt() ?: run { call.respond(HttpStatusCode.BadRequest, mapOf("error" to "missing level")); return@post }
                     val stream = when (body["stream"] as? String) {
                         "music" -> AudioManager.STREAM_MUSIC
                         "ring" -> AudioManager.STREAM_RING

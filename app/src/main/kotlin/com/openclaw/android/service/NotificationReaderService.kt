@@ -94,7 +94,7 @@ class NotificationReaderService : NotificationListenerService() {
     }
 
     companion object {
-        var instance: NotificationReaderService? = null
+        @Volatile var instance: NotificationReaderService? = null
             private set
         private val recentNotifications = ConcurrentLinkedDeque<JsonObject>()
     }

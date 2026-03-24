@@ -178,7 +178,7 @@ class ScreenReaderService : AccessibilityService() {
     }
 
     companion object {
-        var instance: ScreenReaderService? = null
+        @Volatile var instance: ScreenReaderService? = null
             private set
     }
 }

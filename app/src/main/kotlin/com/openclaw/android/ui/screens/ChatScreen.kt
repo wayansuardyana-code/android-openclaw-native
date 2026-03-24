@@ -7,6 +7,7 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
@@ -82,6 +83,9 @@ fun ChatScreen() {
     val llmClient = remember { LlmClient() }
     val agentLoop = remember { AgentLoop(llmClient) }
     val context = LocalContext.current
+
+    // Fix #2: cleanup LlmClient on dispose
+    DisposableEffect(Unit) { onDispose { llmClient.close() } }
 
     val config = AgentConfig.toLlmConfig()
     val hasApiKey = AgentConfig.getKeyForProvider(AgentConfig.activeProvider).isNotBlank() || AgentConfig.activeProvider == "ollama"
@@ -165,22 +169,26 @@ fun ChatScreen() {
 
         scope.launch {
             isLoading = true
-            val customPromptFile = File(com.openclaw.android.OpenClawApplication.instance.filesDir, "agent_config/system_prompt.md")
-            val customPrompt = if (customPromptFile.exists()) customPromptFile.readText() else ""
-            val identityFile = File(com.openclaw.android.OpenClawApplication.instance.filesDir, "agent_config/identity.md")
-            val identity = if (identityFile.exists()) identityFile.readText() else ""
+            try {
+                val appFiles = com.openclaw.android.OpenClawApplication.instance.filesDir
+                val customPrompt = File(appFiles, "agent_config/system_prompt.md").let { if (it.exists()) it.readText() else "" }
+                val identity = File(appFiles, "agent_config/identity.md").let { if (it.exists()) it.readText() else "" }
 
-            val systemPrompt = """You are OpenClaw, an AI assistant running natively on an Android device.
-You have direct control over the device through tools. You can read the screen, tap buttons, type text, open apps, read notifications, run shell commands, scrape websites, search the web, calculate math, read/write files, generate CSVs, and make HTTP requests.
+                val systemPrompt = """You are OpenClaw, an AI assistant running natively on an Android device.
+You have direct control over the device through tools. You can read the screen, tap buttons, type text, open apps, read notifications, run shell commands, scrape websites, search the web, calculate math, read/write files, generate CSVs, make HTTP requests, and call GitHub/Vercel/Supabase/Google Workspace APIs.
 When the user asks you to do something on their phone, use the available tools to accomplish it.
 Be concise and action-oriented. Execute tasks, don't just describe how to do them.
 Respond in the same language as the user.
 ${if (identity.isNotBlank()) "\n--- IDENTITY ---\n$identity" else ""}
 ${if (customPrompt.isNotBlank()) "\n--- CUSTOM INSTRUCTIONS ---\n$customPrompt" else ""}"""
 
-            val response = agentLoop.run(config, actualMessage + fileContext, systemPrompt)
-            messages.add(ChatMessage("assistant", response))
-            isLoading = false
+                val response = agentLoop.run(config, actualMessage + fileContext, systemPrompt)
+                messages.add(ChatMessage("assistant", response))
+            } catch (e: Exception) {
+                messages.add(ChatMessage("system", "Error: ${e.message}"))
+            } finally {
+                isLoading = false
+            }
         }
     }
 

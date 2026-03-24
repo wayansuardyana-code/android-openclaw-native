@@ -2,6 +2,7 @@ package com.openclaw.android.util
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 /**
  * Shared state between Service and UI.
@@ -28,13 +29,10 @@ object ServiceState {
         val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
             .format(java.util.Date())
         val entry = "[$timestamp] $message"
-        val current = _logs.value.toMutableList()
-        current.add(entry)
-        // Keep last 500 lines
-        if (current.size > 500) {
-            _logs.value = current.takeLast(500)
-        } else {
-            _logs.value = current
+        // Thread-safe atomic update
+        _logs.update { current ->
+            val updated = current + entry
+            if (updated.size > 500) updated.takeLast(500) else updated
         }
     }
 

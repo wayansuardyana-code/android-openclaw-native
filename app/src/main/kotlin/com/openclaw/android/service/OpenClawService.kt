@@ -99,11 +99,12 @@ class OpenClawService : Service() {
 
     private fun acquireWakeLock() {
         val pm = getSystemService(POWER_SERVICE) as PowerManager
+        @Suppress("WakelockTimeout")
         wakeLock = pm.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
             "OpenClaw::ServiceWakeLock"
         ).apply {
-            acquire(10 * 60 * 1000L) // 10 min, auto-renewed by sticky service
+            acquire() // No timeout — released in onDestroy
         }
     }
 

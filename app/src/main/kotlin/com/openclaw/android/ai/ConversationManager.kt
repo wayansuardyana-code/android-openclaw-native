@@ -3,6 +3,7 @@ package com.openclaw.android.ai
 import com.openclaw.android.util.ServiceState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 /**
  * Manages conversation history with token tracking and auto-compaction.
@@ -34,7 +35,7 @@ object ConversationManager {
     // Compaction triggers at 70% of context window
     private const val COMPACTION_THRESHOLD = 0.70
 
-    private val _history = mutableListOf<LlmClient.Message>()
+    private val _history = java.util.Collections.synchronizedList(mutableListOf<LlmClient.Message>())
     private val _tokenCount = MutableStateFlow(0L)
     val tokenCount = _tokenCount.asStateFlow()
 
@@ -63,20 +64,20 @@ object ConversationManager {
     fun getHistory(): List<LlmClient.Message> = _history.toList()
 
     /** Add a user message */
-    fun addUserMessage(content: String) {
+    @Synchronized fun addUserMessage(content: String) {
         _history.add(LlmClient.Message("user", content))
-        _tokenCount.value += estimateTokens(content)
+        _tokenCount.update { it + estimateTokens(content) }
     }
 
     /** Add an assistant response */
-    fun addAssistantMessage(content: String) {
+    @Synchronized fun addAssistantMessage(content: String) {
         _history.add(LlmClient.Message("assistant", content))
-        _tokenCount.value += estimateTokens(content)
+        _tokenCount.update { it + estimateTokens(content) }
     }
 
     /** Record actual tokens used from API response */
     fun recordTokensUsed(tokens: Int) {
-        _totalTokensUsed.value += tokens
+        _totalTokensUsed.update { it + tokens }
     }
 
     /** Check if compaction is needed and do it */

@@ -50,10 +50,12 @@ data class KanbanTask(
 // Shared task state so agent can modify it
 object TaskBoard {
     val tasks = mutableStateListOf<KanbanTask>()
-    private var nextId = 1L
+    private val nextId = java.util.concurrent.atomic.AtomicLong(1L)
 
-    fun addPending(title: String) {
-        tasks.add(KanbanTask(id = nextId++, title = title, status = "pending"))
+    fun addPending(title: String): Long {
+        val id = nextId.getAndIncrement()
+        tasks.add(KanbanTask(id = id, title = title, status = "pending"))
+        return id
     }
     fun moveToActive(taskId: Long, agentId: String? = null) {
         val idx = tasks.indexOfFirst { it.id == taskId }

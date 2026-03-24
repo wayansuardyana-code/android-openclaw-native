@@ -265,7 +265,7 @@ object ServiceTools {
 
         val response = conn.execute()
         val responseBody = response.body().take(4000)
-        return """{"status":${response.statusCode()},"body":${responseBody}}"""
+        return """{"status":${response.statusCode()},"body":${Gson().toJson(responseBody)}}"""
     }
 
     private fun sshExecute(args: JsonObject): String {

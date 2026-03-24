@@ -188,9 +188,10 @@ fun TerminalTab() {
                     val result = withContext(Dispatchers.IO) {
                         try {
                             val process = ProcessBuilder("sh", "-c", cmd).redirectErrorStream(true).start()
-                            val out = BufferedReader(InputStreamReader(process.inputStream)).readText()
-                            val exitCode = process.waitFor()
-                            Pair(out.ifBlank { "(no output)" }, exitCode)
+                            val out = BufferedReader(InputStreamReader(process.inputStream)).readText().take(4000)
+                            val finished = process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS)
+                            if (!finished) { process.destroyForcibly(); Pair("(timed out after 30s)", 1) }
+                            else Pair(out.ifBlank { "(no output)" }, process.exitValue())
                         } catch (e: Exception) { Pair("Error: ${e.message}", 1) }
                     }
                     val color = if (result.second == 0) Color(0xFFC9D1D9) else RED

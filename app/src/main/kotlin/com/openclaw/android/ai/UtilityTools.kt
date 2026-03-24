@@ -144,7 +144,8 @@ object UtilityTools {
 
     suspend fun executeTool(name: String, args: JsonObject): String {
         ServiceState.addLog("Utility tool: $name")
-        return try {
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        try {
             when (name) {
                 "run_shell_command" -> runShell(args.get("command").asString)
                 "web_scrape" -> webScrape(args.get("url").asString, args.get("selector")?.asString)
@@ -173,6 +174,7 @@ object UtilityTools {
             ServiceState.addLog("Utility tool error: $name — ${e.message}")
             """{"error":"${e.message?.replace("\"", "'")}"}"""
         }
+        } // end withContext(IO)
     }
 
     private fun runShell(command: String): String {
@@ -201,13 +203,15 @@ object UtilityTools {
 
     private fun webScrape(url: String, selector: String?): String {
         val fullUrl = if (url.startsWith("http")) url else "https://$url"
-        val doc = Jsoup.connect(fullUrl)
+        val conn = Jsoup.connect(fullUrl)
             .userAgent("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36")
+            .header("Accept", "text/html,application/xhtml+xml")
             .timeout(15000)
             .followRedirects(true)
             .ignoreHttpErrors(true)
-            .sslSocketFactory(trustAllSsl())
-            .get()
+        // Apply SSL trust for devices with outdated certs
+        try { conn.sslSocketFactory(trustAllSsl()) } catch (_: Exception) {}
+        val doc = conn.get()
 
         val title = doc.title()
         val content = if (selector != null) {
@@ -222,13 +226,14 @@ object UtilityTools {
 
     private fun webSearch(query: String): String {
         val encoded = java.net.URLEncoder.encode(query, "UTF-8")
-        val doc = Jsoup.connect("https://html.duckduckgo.com/html/?q=$encoded")
+        val conn = Jsoup.connect("https://html.duckduckgo.com/html/?q=$encoded")
             .userAgent("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36")
+            .header("Accept", "text/html")
             .timeout(15000)
             .followRedirects(true)
             .ignoreHttpErrors(true)
-            .sslSocketFactory(trustAllSsl())
-            .get()
+        try { conn.sslSocketFactory(trustAllSsl()) } catch (_: Exception) {}
+        val doc = conn.get()
 
         val results = doc.select(".result__body").take(5).mapIndexed { i, el ->
             val resultTitle = el.select(".result__title").text()

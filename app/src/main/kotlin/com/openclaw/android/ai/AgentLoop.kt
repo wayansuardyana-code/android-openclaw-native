@@ -114,7 +114,9 @@ class AgentLoop(private val llmClient: LlmClient) {
             }
 
             ServiceState.addLog("Agent: max steps reached")
-            return "I reached the maximum number of steps ($maxSteps). Here's what I've done so far."
+            val fallback = "I reached the maximum number of steps ($maxSteps). Here's what I've done so far."
+            ConversationManager.addAssistantMessage(fallback)
+            return fallback
         } finally {
             _isThinking.value = false
         }

@@ -63,7 +63,7 @@
     <application
         android:name=".OpenClawApplication"
         android:allowBackup="true"
-        android:icon="@drawable/ic_launcher_foreground"
+        android:icon="@drawable/openclaw_logo"
         android:label="OpenClaw"
         android:supportsRtl="true"
         android:theme="@style/Theme.OpenClaw"

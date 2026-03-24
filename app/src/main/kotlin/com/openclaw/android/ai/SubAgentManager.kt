@@ -44,15 +44,14 @@ object SubAgentManager {
         val agentId = "sub_${System.currentTimeMillis()}"
 
         // Add to pending kanban
-        TaskBoard.addPending(taskTitle)
-        val task = TaskBoard.tasks.lastOrNull() ?: return "Failed to create task"
+        val taskId = TaskBoard.addPending(taskTitle)
 
         // Register sub-agent
-        _agents.value = _agents.value + SubAgent(agentId, task.id, taskTitle, "running")
+        _agents.value = _agents.value + SubAgent(agentId, taskId, taskTitle, "running")
         ServiceState.addLog("SubAgent spawned: $agentId — $taskTitle")
 
         // Move to active
-        TaskBoard.moveToActive(task.id, agentId)
+        TaskBoard.moveToActive(taskId, agentId)
 
         // Run in background
         scope.launch {
@@ -66,7 +65,7 @@ Be concise in your response — this will be reported back to the user."""
                 val result = agentLoop.run(config, prompt, systemPrompt)
 
                 // Update state
-                TaskBoard.moveToDone(task.id)
+                TaskBoard.moveToDone(taskId)
                 _agents.value = _agents.value.map {
                     if (it.id == agentId) it.copy(status = "completed", result = result) else it
                 }
@@ -74,7 +73,7 @@ Be concise in your response — this will be reported back to the user."""
                 NotificationHelper.notifyTaskComplete("$taskTitle\n${result.take(200)}")
 
             } catch (e: Exception) {
-                TaskBoard.moveToDone(task.id) // Still move to done (failed)
+                TaskBoard.moveToDone(taskId) // Still move to done (failed)
                 _agents.value = _agents.value.map {
                     if (it.id == agentId) it.copy(status = "failed", result = "Error: ${e.message}") else it
                 }

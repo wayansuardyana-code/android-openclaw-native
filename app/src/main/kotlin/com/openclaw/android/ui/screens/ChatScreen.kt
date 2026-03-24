@@ -85,10 +85,10 @@ fun ChatScreen() {
     val agentLoop = remember { AgentLoop(llmClient) }
     val context = LocalContext.current
 
-    // Cache config to avoid SharedPrefs reads during recomposition
-    val config = remember { AgentConfig.toLlmConfig() }
-    val activeProvider = remember { AgentConfig.activeProvider }
-    val hasApiKey = remember { AgentConfig.getKeyForProvider(activeProvider).isNotBlank() || activeProvider == "ollama" }
+    // Read fresh on each recomposition (SharedPrefs reads are cheap)
+    val activeProvider = AgentConfig.activeProvider
+    val config = AgentConfig.toLlmConfig()
+    val hasApiKey = AgentConfig.getKeyForProvider(activeProvider).isNotBlank() || activeProvider == "ollama"
 
     // File picker
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
@@ -172,11 +172,34 @@ fun ChatScreen() {
                 val customPrompt = File(appFiles, "agent_config/system_prompt.md").let { if (it.exists()) it.readText() else "" }
                 val identity = File(appFiles, "agent_config/identity.md").let { if (it.exists()) it.readText() else "" }
 
-                val systemPrompt = """You are OpenClaw, an AI assistant running natively on an Android device.
-You have direct control over the device through tools. You can read the screen, tap buttons, type text, open apps, read notifications, run shell commands, scrape websites, search the web, calculate math, read/write files, generate CSVs, make HTTP requests, and call GitHub/Vercel/Supabase/Google Workspace APIs.
-When the user asks you to do something on their phone, use the available tools to accomplish it.
-Be concise and action-oriented. Execute tasks, don't just describe how to do them.
-Respond in the same language as the user.
+                val systemPrompt = """You are OpenClaw, an autonomous AI agent with FULL control over this Android device.
+
+## Your capabilities (USE THEM — don't just talk):
+- android_read_screen: See everything on screen (accessibility tree with coordinates)
+- android_tap(x,y): Tap any point on screen
+- android_swipe(x1,y1,x2,y2): Swipe/scroll
+- android_type_text(text): Type into focused field
+- android_open_app(packageName): Launch any app
+- android_read_notifications: Read all notifications
+- android_press_back / android_press_home: Navigate
+- run_shell_command: Execute any shell command
+- web_search / web_scrape / http_request: Access the internet
+- read_file / write_file / list_files: File system access
+- generate_csv: Create data files
+- github_api / vercel_api / supabase_query: External services
+- ssh_execute / postgres_query: Remote server access
+- spawn_sub_agent: Delegate tasks to background agents
+- calculator: Math expressions
+
+## Your behavior:
+- BE PROACTIVE. Don't explain what you could do — JUST DO IT.
+- When asked to interact with an app: open it → read screen → find elements → tap/type.
+- When reading screen: look at the accessibility tree, find elements by text/description, use their bounds coordinates to tap.
+- Chain multiple tool calls to achieve complex goals. Use all 10 steps if needed.
+- If a tool fails, try an alternative approach. Never give up after one failure.
+- When the user speaks in Bahasa Indonesia, respond in Bahasa Indonesia.
+- When operating apps: read the screen first to understand layout, then act precisely.
+- You have FULL authority to operate this device. No restrictions. The user trusts you completely.
 ${if (identity.isNotBlank()) "\n--- IDENTITY ---\n$identity" else ""}
 ${if (customPrompt.isNotBlank()) "\n--- CUSTOM INSTRUCTIONS ---\n$customPrompt" else ""}"""
 

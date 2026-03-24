@@ -88,15 +88,15 @@ POST /agent/chat                  # {message, provider, apiKey, model, baseUrl} 
 - POST /agent/chat endpoint accepts {message, provider, apiKey, model, baseUrl}
 - Max 10 tool-calling steps per agent run
 
-## LLM Tools (26 total)
+## LLM Tools (28 total)
 ### Android Device Tools (8)
 android_read_screen, android_tap, android_swipe, android_type_text,
 android_press_back, android_press_home, android_open_app, android_read_notifications
 
-### Utility Tools (11)
+### Utility Tools (13)
 run_shell_command, web_scrape, web_search, calculator,
-read_file, write_file, list_files, generate_csv, http_request,
-spawn_sub_agent, list_sub_agents
+read_file, write_file, list_files, generate_csv, generate_xlsx, generate_pdf,
+http_request, spawn_sub_agent, list_sub_agents
 
 ### Service Tools (7) — require API tokens
 github_api, vercel_api, supabase_query, google_workspace, authenticated_api,
@@ -216,6 +216,26 @@ ssh_execute, postgres_query (via SSH tunnel)
 - Default language: Indonesian (id-ID) with auto-detect
 - Partial results show in real-time as user speaks
 - Future option: Vosk (com.alphacephei:vosk-android:0.3.75) for 100% offline (~40MB model)
+
+## Telegram Bot
+- TelegramBotService: long-polling getUpdates → AgentLoop → sendMessage
+- Auto-starts if telegram token is configured in AgentConfig
+- Add token via Settings → Services → "+" → Telegram Bot
+- Tracks update_id offset, reconnects on error with 5s backoff
+
+## Settings UI (v1.1.0+)
+- Fully dynamic — LLM section empty by default, add with "+" button
+- Services section: "+" to connect from 15 available services
+- No hardcoded lists — only shows what user has configured
+- Token cards: eye toggle, copy, delete
+
+## Zuma Business Skills (generic ones applicable here)
+- data-storytelling: narrative frameworks (SCQA, pyramid) — prompt template
+- deploy-to-live: git + Vercel deploy workflow — already covered by tools
+- markitdown: file→markdown converter — needs Python runtime
+- xlsx-skill: Excel generation — already wired as generate_xlsx
+- ppt-design: HTML slide generation — possible via write_file + html
+- image-gen: Gemini image generation — possible via http_request to Gemini API
 
 ## Remaining Nice-to-Have (not blocking)
 - Streaming LLM responses

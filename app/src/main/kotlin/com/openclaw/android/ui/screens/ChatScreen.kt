@@ -55,10 +55,42 @@ data class ChatMessage(
     val attachmentName: String? = null
 )
 
-// Persistent chat state — survives tab switches
+// Persistent chat state — survives tab switches AND app restarts
 object ChatState {
     val messages = mutableStateListOf<ChatMessage>()
-    fun clear() { messages.clear() }
+    private val gson = com.google.gson.Gson()
+    private val type = object : com.google.gson.reflect.TypeToken<List<ChatMessage>>() {}.type
+
+    private fun chatFile(): File =
+        File(com.openclaw.android.OpenClawApplication.instance.filesDir, "chat_history.json")
+
+    fun load() {
+        try {
+            val file = chatFile()
+            if (file.exists()) {
+                val saved: List<ChatMessage> = gson.fromJson(file.readText(), type)
+                messages.clear()
+                messages.addAll(saved.takeLast(200)) // keep last 200 messages
+            }
+        } catch (_: Exception) {}
+    }
+
+    fun save() {
+        try {
+            chatFile().writeText(gson.toJson(messages.toList()))
+        } catch (_: Exception) {}
+    }
+
+    fun clear() {
+        messages.clear()
+        save()
+        com.openclaw.android.ai.ConversationManager.clear()
+    }
+
+    fun addMessage(msg: ChatMessage) {
+        messages.add(msg)
+        save() // persist after every message
+    }
 }
 
 // Slash commands
@@ -83,6 +115,9 @@ private val SLASH_COMMANDS = listOf(
 
 @Composable
 fun ChatScreen() {
+    // Load chat history from disk on first open
+    LaunchedEffect(Unit) { if (ChatState.messages.isEmpty()) ChatState.load() }
+
     val messages = ChatState.messages
     var input by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
@@ -167,25 +202,25 @@ fun ChatScreen() {
         when {
             text == "/clear" -> { ChatState.clear(); com.openclaw.android.ai.ConversationManager.clear(); return }
             text == "/status" -> {
-                messages.add(ChatMessage("system", "Provider: ${AgentConfig.activeProvider}\nModel: ${config.model}\nAPI Key: ${if (hasApiKey) "Set" else "Not set"}\nTools: 17 (8 device + 9 utility)"))
+                ChatState.addMessage(ChatMessage("system", "Provider: ${AgentConfig.activeProvider}\nModel: ${config.model}\nAPI Key: ${if (hasApiKey) "Set" else "Not set"}\nTools: 17 (8 device + 9 utility)"))
                 return
             }
             text == "/tools" -> {
-                messages.add(ChatMessage("system", "Android: read_screen, tap, swipe, type_text, press_back, press_home, open_app, read_notifications\n\nUtility: run_shell_command, web_scrape, web_search, calculator, read_file, write_file, list_files, generate_csv, http_request"))
+                ChatState.addMessage(ChatMessage("system", "Android: read_screen, tap, swipe, type_text, press_back, press_home, open_app, read_notifications\n\nUtility: run_shell_command, web_scrape, web_search, calculator, read_file, write_file, list_files, generate_csv, http_request"))
                 return
             }
             text == "/help" || text == "/" -> {
-                messages.add(ChatMessage("system", SLASH_COMMANDS.joinToString("\n") { "${it.first}  —  ${it.second}" }))
+                ChatState.addMessage(ChatMessage("system", SLASH_COMMANDS.joinToString("\n") { "${it.first}  —  ${it.second}" }))
                 return
             }
             text == "/identity" -> {
                 val f = File(com.openclaw.android.OpenClawApplication.instance.filesDir, "agent_config/identity.md")
-                messages.add(ChatMessage("system", if (f.exists()) f.readText() else "(no identity.md yet — edit in Files tab)"))
+                ChatState.addMessage(ChatMessage("system", if (f.exists()) f.readText() else "(no identity.md yet — edit in Files tab)"))
                 return
             }
             text == "/prompt" -> {
                 val f = File(com.openclaw.android.OpenClawApplication.instance.filesDir, "agent_config/system_prompt.md")
-                messages.add(ChatMessage("system", if (f.exists()) f.readText() else "(no system_prompt.md yet — edit in Files tab)"))
+                ChatState.addMessage(ChatMessage("system", if (f.exists()) f.readText() else "(no system_prompt.md yet — edit in Files tab)"))
                 return
             }
         }
@@ -205,7 +240,7 @@ fun ChatScreen() {
         }
 
         val displayMsg = if (attachedFile != null) "$actualMessage\n[Attached: ${attachedFile!!.first}]" else actualMessage
-        messages.add(ChatMessage("user", displayMsg, attachmentName = attachedFile?.first))
+        ChatState.addMessage(ChatMessage("user", displayMsg, attachmentName = attachedFile?.first))
 
         val fileContext = attachedFile?.let { "\n\n--- ATTACHED FILE: ${it.first} ---\n${it.second}" } ?: ""
         attachedFile = null
@@ -216,7 +251,7 @@ fun ChatScreen() {
                 // Auto-bootstrap on first connection
                 if (!com.openclaw.android.ai.Bootstrap.isBootstrapped()) {
                     com.openclaw.android.ai.Bootstrap.run()
-                    messages.add(ChatMessage("system", "Workspace initialized. Edit files in the Files tab."))
+                    ChatState.addMessage(ChatMessage("system", "Workspace initialized. Edit files in the Files tab."))
                 }
 
                 // Load all workspace files for context
@@ -249,9 +284,9 @@ ${if (memory.isNotBlank()) "\n--- MEMORY ---\n$memory" else ""}
 ${if (customPrompt.isNotBlank()) "\n--- CUSTOM INSTRUCTIONS ---\n$customPrompt" else ""}"""
 
                 val response = agentLoop.run(config, actualMessage + fileContext, systemPrompt)
-                messages.add(ChatMessage("assistant", response))
+                ChatState.addMessage(ChatMessage("assistant", response))
             } catch (e: Exception) {
-                messages.add(ChatMessage("system", "Error: ${e.message}"))
+                ChatState.addMessage(ChatMessage("system", "Error: ${e.message}"))
             } finally {
                 isLoading = false
             }

@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import java.io.File
 
 private val BG = Color(0xFF0D1117)
@@ -60,7 +61,11 @@ fun FilesScreen() {
     // Get all files from workspace
     val allFiles = remember { com.openclaw.android.ai.Bootstrap.getAllFiles() }
 
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize().background(BG).padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = PaddingValues(vertical = 16.dp)
@@ -83,6 +88,8 @@ fun FilesScreen() {
                     editContent = com.openclaw.android.ai.Bootstrap.readFile(name)
                     isDirty = false
                     saveMessage = null
+                    // Scroll to editor (items: 1 header + N files + 1 editor header + 1 editor)
+                    scope.launch { listState.animateScrollToItem(allFiles.size + 2) }
                 }
             ) {
                 Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {

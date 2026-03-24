@@ -11,10 +11,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.io.File
 
 private val BG = Color(0xFF0D1117)
 private val SURFACE = Color(0xFF161B22)
@@ -71,6 +73,9 @@ Add custom instructions that get appended to the agent's system prompt.
 - web_scrape: Fetch and parse web pages
 - calculator: Math expressions and statistics
 - android_control: Full device control via accessibility
+- shell: Execute shell commands
+- web_search: DuckDuckGo search
+- http_request: Call any API
 
 ## Pending
 - (skills waiting to be installed)
@@ -79,9 +84,21 @@ Add custom instructions that get appended to the agent's system prompt.
 
 @Composable
 fun FilesScreen() {
+    val context = LocalContext.current
+    val filesDir = remember { File(context.filesDir, "agent_config") }
     var selectedFile by remember { mutableStateOf<MdFile?>(null) }
     var editContent by remember { mutableStateOf("") }
     var isDirty by remember { mutableStateOf(false) }
+    var saveMessage by remember { mutableStateOf<String?>(null) }
+
+    // Ensure directory exists
+    LaunchedEffect(Unit) { filesDir.mkdirs() }
+
+    // Load file content when selected
+    fun loadFileContent(file: MdFile): String {
+        val diskFile = File(filesDir, file.name)
+        return if (diskFile.exists()) diskFile.readText() else file.defaultContent
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(BG).padding(horizontal = 16.dp),
@@ -94,7 +111,6 @@ fun FilesScreen() {
             Spacer(Modifier.height(8.dp))
         }
 
-        // File list
         items(defaultFiles) { file ->
             val isSelected = selectedFile?.name == file.name
             Card(
@@ -103,8 +119,9 @@ fun FilesScreen() {
                 border = if (isSelected) BorderStroke(1.dp, CYAN) else null,
                 modifier = Modifier.fillMaxWidth().clickable {
                     selectedFile = file
-                    editContent = file.defaultContent
+                    editContent = loadFileContent(file)
                     isDirty = false
+                    saveMessage = null
                 }
             ) {
                 Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -121,16 +138,24 @@ fun FilesScreen() {
             }
         }
 
-        // Editor
         if (selectedFile != null) {
             item {
                 Spacer(Modifier.height(4.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text("Editing: ${selectedFile?.name}", color = CYAN, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-                    if (isDirty) {
+                    Row {
+                        if (saveMessage != null) {
+                            Text(saveMessage!!, color = GREEN, fontSize = 11.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(end = 8.dp))
+                        }
                         Button(
-                            onClick = { isDirty = false /* TODO: save to file system */ },
-                            colors = ButtonDefaults.buttonColors(containerColor = GREEN),
+                            onClick = {
+                                selectedFile?.let { file ->
+                                    File(filesDir, file.name).writeText(editContent)
+                                    isDirty = false
+                                    saveMessage = "Saved!"
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = if (isDirty) GREEN else BORDER),
                             shape = RoundedCornerShape(6.dp),
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                         ) {
@@ -142,15 +167,12 @@ fun FilesScreen() {
             item {
                 OutlinedTextField(
                     value = editContent,
-                    onValueChange = { editContent = it; isDirty = true },
+                    onValueChange = { editContent = it; isDirty = true; saveMessage = null },
                     modifier = Modifier.fillMaxWidth().height(400.dp),
                     textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = TEXT, lineHeight = 18.sp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = CYAN,
-                        unfocusedBorderColor = BORDER,
-                        cursorColor = CYAN,
-                        focusedContainerColor = Color(0xFF010409),
-                        unfocusedContainerColor = Color(0xFF010409)
+                        focusedBorderColor = CYAN, unfocusedBorderColor = BORDER, cursorColor = CYAN,
+                        focusedContainerColor = Color(0xFF010409), unfocusedContainerColor = Color(0xFF010409)
                     )
                 )
             }

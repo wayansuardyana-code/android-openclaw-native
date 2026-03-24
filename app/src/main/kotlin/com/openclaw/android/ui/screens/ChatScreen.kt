@@ -21,6 +21,7 @@ import com.openclaw.android.ai.AgentConfig
 import com.openclaw.android.ai.AgentLoop
 import com.openclaw.android.ai.LlmClient
 import kotlinx.coroutines.launch
+import java.io.File
 
 private val BG = Color(0xFF0D1117)
 private val SURFACE = Color(0xFF161B22)
@@ -198,11 +199,19 @@ fun ChatScreen() {
 
                     scope.launch {
                         isLoading = true
+                        // Load system prompt from file if it exists
+                        val customPromptFile = File(com.openclaw.android.OpenClawApplication.instance.filesDir, "agent_config/system_prompt.md")
+                        val customPrompt = if (customPromptFile.exists()) customPromptFile.readText() else ""
+                        val identityFile = File(com.openclaw.android.OpenClawApplication.instance.filesDir, "agent_config/identity.md")
+                        val identity = if (identityFile.exists()) identityFile.readText() else ""
+
                         val systemPrompt = """You are OpenClaw, an AI assistant running natively on an Android device.
-You have direct control over the device through tools. You can read the screen, tap buttons, type text, open apps, and read notifications.
+You have direct control over the device through tools. You can read the screen, tap buttons, type text, open apps, read notifications, run shell commands, scrape websites, search the web, calculate math, read/write files, generate CSVs, and make HTTP requests.
 When the user asks you to do something on their phone, use the available tools to accomplish it.
 Be concise and action-oriented. Execute tasks, don't just describe how to do them.
-Respond in the same language as the user."""
+Respond in the same language as the user.
+${if (identity.isNotBlank()) "\n--- IDENTITY ---\n$identity" else ""}
+${if (customPrompt.isNotBlank()) "\n--- CUSTOM INSTRUCTIONS ---\n$customPrompt" else ""}"""
 
                         val response = agentLoop.run(config, userMsg, systemPrompt)
                         messages.add(ChatMessage("assistant", response))

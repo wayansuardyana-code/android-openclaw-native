@@ -318,6 +318,86 @@ Tasks:
 
 **Deliverable:** Polished APK, install once → full AI-controlled Android
 
+### Phase 5: Web App Mirror + Google Auth ⏳ (v2.0)
+
+**Goal:** Access OpenClaw from any browser — same chat, dashboard, logs, connectors. Single Google Sign-In across Android + web. Google account doubles as GWS API auth.
+
+```
+Architecture:
+
+┌────────────────────┐         ┌──────────────────┐
+│  WEB APP (Vercel)  │  HTTPS  │  ANDROID (HP)    │
+│  Next.js dashboard │ ──────→ │  Bridge :18790   │
+│  Chat, Logs, Dash  │         │  OpenClaw agent  │
+│  Google Sign-In    │         │  Accessibility   │
+└────────────────────┘         └──────────────────┘
+         ↑                              ↑
+         │ Browser                      │ Secure tunnel
+         │                              │ (Cloudflare Tunnel / ngrok)
+    ┌─────────┐                    ┌──────────┐
+    │ Laptop  │                    │ Internet │
+    └─────────┘                    └──────────┘
+
+Tasks:
+├── 5.1 Secure Tunnel — expose phone bridge to internet
+│   ├── Option A: Cloudflare Tunnel (free, stable, custom domain)
+│   ├── Option B: ngrok (free tier, random URL)
+│   ├── Option C: Tailscale Funnel (mesh VPN, invite-only access)
+│   └── Auth token verification on bridge server (prevent unauthorized access)
+│
+├── 5.2 Web App — Next.js on Vercel
+│   ├── Same 5 tabs: Chat, Dashboard, Connectors, Logs, Settings
+│   ├── WebSocket connection to phone bridge for real-time sync
+│   ├── Chat: send messages, receive responses, slash commands
+│   ├── Dashboard: kanban, hardware stats (proxied from phone)
+│   ├── Logs: real-time log streaming via WebSocket
+│   ├── Settings: provider config, API keys (synced with phone)
+│   └── Responsive design — works on laptop, tablet, phone browser
+│
+├── 5.3 Google Sign-In — dual platform auth
+│   ├── Google Cloud Console: create project, enable APIs
+│   ├── OAuth2 Client ID (Web) → Vercel web app
+│   ├── OAuth2 Client ID (Android) → Android app
+│   ├── Scopes: openid, profile, email + Drive, Sheets, Gmail, Calendar
+│   ├── Android: com.google.android.gms:play-services-auth
+│   ├── Web: next-auth or @auth/core with Google provider
+│   └── Token flow:
+│       ├── User logs in → ID token (identity) + access token (GWS APIs)
+│       ├── Access token stored in AgentConfig
+│       ├── google_workspace tool uses stored token automatically
+│       └── Refresh token for persistent login (no re-auth needed)
+│
+├── 5.4 Bridge Server Upgrades
+│   ├── WebSocket endpoint for real-time events (logs, notifications, status)
+│   ├── Auth middleware — verify JWT/token on all endpoints
+│   ├── CORS config for Vercel web app domain
+│   ├── Rate limiting on public-facing endpoints
+│   └── Encrypted communication (tunnel handles TLS)
+│
+├── 5.5 Multi-Device Session Sync
+│   ├── Chat history synced between Android app and web app
+│   ├── Settings synced via bridge server (single source of truth = phone)
+│   ├── Concurrent access: web + Android can both chat simultaneously
+│   └── Conflict resolution: phone state is always master
+│
+└── 5.6 Google Workspace Native Integration
+    ├── Login with Google → access token covers all GWS APIs
+    ├── No separate GWS CLI needed — direct REST API calls
+    ├── Supported: Drive (files), Sheets (data), Gmail (email),
+    │   Calendar (events), Docs (documents)
+    ├── Auto-refresh token on expiry
+    └── User can revoke access via Google Account settings
+```
+
+**Deliverable:** Web dashboard at https://openclaw.vercel.app (or custom domain), login with Google, control your phone from any browser. Same experience as Android app.
+
+**Key Decisions:**
+- Tunnel: Cloudflare Tunnel recommended (free, stable, custom domain support)
+- Web framework: Next.js 16 + shadcn/ui + Vercel AI SDK
+- Auth: Google OAuth2 via Google Cloud Console (not Firebase — too heavy)
+- State: Phone is always master, web is a mirror/remote control
+- GWS: Google login token = GWS API token (no separate auth flow)
+
 ---
 
 ## Device Compatibility

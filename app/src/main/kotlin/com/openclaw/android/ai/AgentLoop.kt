@@ -3,6 +3,7 @@ package com.openclaw.android.ai
 import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
+import com.openclaw.android.util.NotificationHelper
 import com.openclaw.android.util.ServiceState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -52,6 +53,7 @@ class AgentLoop(private val llmClient: LlmClient) {
 
                 if (response.error != null) {
                     ServiceState.addLog("Agent: LLM error — ${response.error}")
+                    NotificationHelper.notifyError(response.error)
                     return "Error: ${response.error}"
                 }
 
@@ -99,6 +101,7 @@ class AgentLoop(private val llmClient: LlmClient) {
 
                 // Plain text response — we're done
                 ServiceState.addLog("Agent: final response (${content.length} chars, ${response.tokensUsed} tokens)")
+                NotificationHelper.notifyAgentResponse("OpenClaw", content.take(200))
                 return content
             }
 

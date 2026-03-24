@@ -12,15 +12,15 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 
 /**
- * AccessibilityService that provides:
- * - Screen reading (get all visible UI elements as structured data)
- * - Tap/click any element by coordinates or text
- * - Swipe gestures
- * - Type text into any field
- * - Global actions (back, home, recents, notifications)
- * - Screenshot (API 30+)
+ * AccessibilityService — optimized for token efficiency.
  *
- * This is the "eyes and hands" of the AI agent on Android.
+ * Key optimizations:
+ * - Compact JSON: short keys (t=text, d=desc, b=bounds, c=clickable)
+ * - Skip empty non-interactive nodes
+ * - Max depth limit (skip deeply nested containers)
+ * - Max nodes limit (stop after N useful nodes)
+ * - find_element: search by text/desc without full tree dump
+ * - Region-based reading: only read nodes in a screen region
  */
 class ScreenReaderService : AccessibilityService() {
 
@@ -30,25 +30,20 @@ class ScreenReaderService : AccessibilityService() {
         ServiceState.addLog("Accessibility service connected")
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // We primarily use on-demand reads rather than event-driven.
-        // Events are available if needed for real-time monitoring.
-    }
-
-    override fun onInterrupt() {
-        ServiceState.addLog("Accessibility service interrupted")
-    }
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+    override fun onInterrupt() {}
 
     override fun onDestroy() {
         instance = null
         super.onDestroy()
     }
 
-    // ── Screen Reading ──────────────────────────────────────
+    // ── COMPACT Screen Reading ──────────────────────────
 
     /**
-     * Dump the current screen's accessibility tree as JSON.
-     * This gives the AI a structured view of everything on screen.
+     * Read screen with compact JSON format.
+     * Each node: {t:"text", d:"desc", c:1, e:1, b:[l,t,r,b]}
+     * Saves ~70% tokens vs verbose format.
      */
     fun readScreen(): JsonObject {
         val root = rootInActiveWindow ?: return JsonObject().apply {
@@ -56,95 +51,159 @@ class ScreenReaderService : AccessibilityService() {
         }
 
         val result = JsonObject()
-        result.addProperty("packageName", root.packageName?.toString() ?: "unknown")
-        result.add("nodes", traverseNode(root, 0))
+        result.addProperty("pkg", root.packageName?.toString() ?: "?")
+        val nodes = JsonArray()
+        traverseCompact(root, 0, nodes, maxNodes = 60, maxDepth = 12)
+        result.add("ui", nodes)
+        result.addProperty("count", nodes.size())
         root.recycle()
         return result
     }
 
-    private fun traverseNode(node: AccessibilityNodeInfo, depth: Int): JsonArray {
-        val nodes = JsonArray()
+    private fun traverseCompact(node: AccessibilityNodeInfo, depth: Int, out: JsonArray, maxNodes: Int, maxDepth: Int) {
+        if (out.size() >= maxNodes || depth > maxDepth) return
+
         val rect = Rect()
         node.getBoundsInScreen(rect)
+        val text = node.text?.toString() ?: ""
+        val desc = node.contentDescription?.toString() ?: ""
+        val id = node.viewIdResourceName?.substringAfterLast("/") ?: ""
 
-        val obj = JsonObject().apply {
-            addProperty("class", node.className?.toString() ?: "")
-            addProperty("text", node.text?.toString() ?: "")
-            addProperty("description", node.contentDescription?.toString() ?: "")
-            addProperty("id", node.viewIdResourceName ?: "")
-            addProperty("clickable", node.isClickable)
-            addProperty("editable", node.isEditable)
-            addProperty("checked", node.isChecked)
-            addProperty("enabled", node.isEnabled)
-            addProperty("focused", node.isFocused)
-            addProperty("scrollable", node.isScrollable)
-            add("bounds", JsonObject().apply {
-                addProperty("left", rect.left)
-                addProperty("top", rect.top)
-                addProperty("right", rect.right)
-                addProperty("bottom", rect.bottom)
-            })
-            addProperty("depth", depth)
-        }
+        // Only include nodes that have useful info
+        val hasText = text.isNotBlank()
+        val hasDesc = desc.isNotBlank()
+        val isInteractive = node.isClickable || node.isEditable || node.isScrollable
+        val isVisible = rect.width() > 0 && rect.height() > 0
 
-        // Skip empty non-interactive nodes to reduce noise
-        val isRelevant = obj.get("text").asString.isNotEmpty() ||
-            obj.get("description").asString.isNotEmpty() ||
-            node.isClickable || node.isEditable || node.isScrollable
-
-        if (isRelevant) {
-            nodes.add(obj)
+        if (isVisible && (hasText || hasDesc || isInteractive)) {
+            val obj = JsonObject()
+            if (hasText) obj.addProperty("t", text.take(80))  // truncate long text
+            if (hasDesc) obj.addProperty("d", desc.take(80))
+            if (id.isNotBlank()) obj.addProperty("id", id)
+            if (node.isClickable) obj.addProperty("c", 1)     // clickable
+            if (node.isEditable) obj.addProperty("e", 1)      // editable
+            if (node.isScrollable) obj.addProperty("s", 1)    // scrollable
+            // Compact bounds: [left, top, right, bottom]
+            val b = JsonArray()
+            b.add(rect.left); b.add(rect.top); b.add(rect.right); b.add(rect.bottom)
+            obj.add("b", b)
+            out.add(obj)
         }
 
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
-            nodes.addAll(traverseNode(child, depth + 1))
+            traverseCompact(child, depth + 1, out, maxNodes, maxDepth)
             child.recycle()
         }
+    }
 
+    // ── Find Element by Text ────────────────────────────
+
+    /**
+     * Find elements matching text/description. Returns only matches.
+     * Much cheaper than full readScreen — ~50 tokens vs ~2000.
+     */
+    fun findElement(query: String): JsonArray {
+        val root = rootInActiveWindow ?: return JsonArray()
+        val results = JsonArray()
+        searchNode(root, query.lowercase(), results, maxResults = 10)
+        root.recycle()
+        return results
+    }
+
+    private fun searchNode(node: AccessibilityNodeInfo, query: String, out: JsonArray, maxResults: Int) {
+        if (out.size() >= maxResults) return
+
+        val text = node.text?.toString() ?: ""
+        val desc = node.contentDescription?.toString() ?: ""
+        val id = node.viewIdResourceName ?: ""
+
+        if (text.lowercase().contains(query) || desc.lowercase().contains(query) || id.lowercase().contains(query)) {
+            val rect = Rect()
+            node.getBoundsInScreen(rect)
+            val obj = JsonObject()
+            if (text.isNotBlank()) obj.addProperty("t", text.take(100))
+            if (desc.isNotBlank()) obj.addProperty("d", desc.take(100))
+            obj.addProperty("c", if (node.isClickable) 1 else 0)
+            // Tap point: center of bounds
+            obj.addProperty("x", (rect.left + rect.right) / 2)
+            obj.addProperty("y", (rect.top + rect.bottom) / 2)
+            out.add(obj)
+        }
+
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            searchNode(child, query, out, maxResults)
+            child.recycle()
+        }
+    }
+
+    // ── Read Region Only ────────────────────────────────
+
+    /**
+     * Read only nodes within a screen region. Saves tokens for partial reads.
+     */
+    fun readRegion(left: Int, top: Int, right: Int, bottom: Int): JsonArray {
+        val root = rootInActiveWindow ?: return JsonArray()
+        val region = Rect(left, top, right, bottom)
+        val nodes = JsonArray()
+        readNodeInRegion(root, region, nodes, maxNodes = 30)
+        root.recycle()
         return nodes
     }
 
-    // ── Tap / Click ─────────────────────────────────────────
+    private fun readNodeInRegion(node: AccessibilityNodeInfo, region: Rect, out: JsonArray, maxNodes: Int) {
+        if (out.size() >= maxNodes) return
+        val rect = Rect()
+        node.getBoundsInScreen(rect)
+        if (!Rect.intersects(rect, region)) return
+
+        val text = node.text?.toString() ?: ""
+        val desc = node.contentDescription?.toString() ?: ""
+        if (text.isNotBlank() || desc.isNotBlank() || node.isClickable) {
+            val obj = JsonObject()
+            if (text.isNotBlank()) obj.addProperty("t", text.take(80))
+            if (desc.isNotBlank()) obj.addProperty("d", desc.take(80))
+            if (node.isClickable) obj.addProperty("c", 1)
+            obj.addProperty("x", (rect.left + rect.right) / 2)
+            obj.addProperty("y", (rect.top + rect.bottom) / 2)
+            out.add(obj)
+        }
+
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            readNodeInRegion(child, region, out, maxNodes)
+            child.recycle()
+        }
+    }
+
+    // ── Tap / Click ─────────────────────────────────────
 
     fun tap(x: Float, y: Float, callback: ((Boolean) -> Unit)? = null) {
         val path = Path().apply { moveTo(x, y) }
         val gesture = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(path, 0, 100))
             .build()
-
         dispatchGesture(gesture, object : GestureResultCallback() {
-            override fun onCompleted(gestureDescription: GestureDescription?) {
-                callback?.invoke(true)
-            }
-            override fun onCancelled(gestureDescription: GestureDescription?) {
-                callback?.invoke(false)
-            }
+            override fun onCompleted(g: GestureDescription?) { callback?.invoke(true) }
+            override fun onCancelled(g: GestureDescription?) { callback?.invoke(false) }
         }, null)
     }
 
-    // ── Swipe ───────────────────────────────────────────────
+    // ── Swipe ───────────────────────────────────────────
 
     fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, durationMs: Long = 300, callback: ((Boolean) -> Unit)? = null) {
-        val path = Path().apply {
-            moveTo(x1, y1)
-            lineTo(x2, y2)
-        }
+        val path = Path().apply { moveTo(x1, y1); lineTo(x2, y2) }
         val gesture = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(path, 0, durationMs))
             .build()
-
         dispatchGesture(gesture, object : GestureResultCallback() {
-            override fun onCompleted(gestureDescription: GestureDescription?) {
-                callback?.invoke(true)
-            }
-            override fun onCancelled(gestureDescription: GestureDescription?) {
-                callback?.invoke(false)
-            }
+            override fun onCompleted(g: GestureDescription?) { callback?.invoke(true) }
+            override fun onCancelled(g: GestureDescription?) { callback?.invoke(false) }
         }, null)
     }
 
-    // ── Type Text ───────────────────────────────────────────
+    // ── Type Text ───────────────────────────────────────
 
     fun typeText(text: String): Boolean {
         val focused = findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: return false
@@ -156,13 +215,12 @@ class ScreenReaderService : AccessibilityService() {
         return result
     }
 
-    // ── Global Actions ──────────────────────────────────────
+    // ── Global Actions ──────────────────────────────────
 
     fun pressBack(): Boolean = performGlobalAction(GLOBAL_ACTION_BACK)
     fun pressHome(): Boolean = performGlobalAction(GLOBAL_ACTION_HOME)
     fun pressRecents(): Boolean = performGlobalAction(GLOBAL_ACTION_RECENTS)
     fun openNotifications(): Boolean = performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
-    fun openQuickSettings(): Boolean = performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)
 
     fun lockScreen(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -172,8 +230,7 @@ class ScreenReaderService : AccessibilityService() {
 
     fun takeScreenshot(callback: TakeScreenshotCallback) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            takeScreenshot(android.view.Display.DEFAULT_DISPLAY,
-                mainExecutor, callback)
+            takeScreenshot(android.view.Display.DEFAULT_DISPLAY, mainExecutor, callback)
         }
     }
 

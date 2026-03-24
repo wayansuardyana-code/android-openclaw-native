@@ -21,8 +21,29 @@ object AndroidTools {
     private fun getAndroidTools(): List<ToolDef> = listOf(
         ToolDef(
             name = "android_read_screen",
-            description = "Read the current screen content. Returns a JSON accessibility tree with all visible UI elements, their text, descriptions, bounds, and interactive states.",
+            description = "Read the current screen (max 60 nodes, compact format). Use find_element instead when you know what to look for. Each node: t=text, d=desc, c=clickable, e=editable, s=scrollable, b=[left,top,right,bottom]. Tap point = center of bounds.",
             inputSchema = mapOf("type" to "object", "properties" to emptyMap<String, Any>())
+        ),
+        ToolDef(
+            name = "find_element",
+            description = "Find a specific UI element by text, description, or ID. MUCH cheaper than read_screen (~50 tokens vs ~2000). Returns matching elements with tap coordinates (x, y). Use this FIRST before read_screen.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf("query" to mapOf("type" to "string", "description" to "Text, description, or ID to search for (case-insensitive)")),
+                "required" to listOf("query")
+            )
+        ),
+        ToolDef(
+            name = "read_region",
+            description = "Read only UI elements in a specific screen region. Cheaper than full read_screen. Useful after knowing the layout.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "left" to mapOf("type" to "number"), "top" to mapOf("type" to "number"),
+                    "right" to mapOf("type" to "number"), "bottom" to mapOf("type" to "number")
+                ),
+                "required" to listOf("left", "top", "right", "bottom")
+            )
         ),
         ToolDef(
             name = "android_tap",
@@ -99,9 +120,24 @@ object AndroidTools {
                 "android_read_screen" -> {
                     val reader = ScreenReaderService.instance
                         ?: return """{"error":"Accessibility service not enabled"}"""
-                    val tree = reader.readScreen().toString()
-                    // Truncate to prevent LLM timeout on massive accessibility trees
-                    if (tree.length > 8000) tree.take(8000) + "...(truncated, ${tree.length} total chars)" else tree
+                    reader.readScreen().toString()
+                }
+                "find_element" -> {
+                    val reader = ScreenReaderService.instance
+                        ?: return """{"error":"Accessibility service not enabled"}"""
+                    val query = args.get("query")?.asString ?: ""
+                    val results = reader.findElement(query)
+                    """{"matches":${results.size()},"elements":$results}"""
+                }
+                "read_region" -> {
+                    val reader = ScreenReaderService.instance
+                        ?: return """{"error":"Accessibility service not enabled"}"""
+                    val l = args.get("left")?.asInt ?: 0
+                    val t = args.get("top")?.asInt ?: 0
+                    val r = args.get("right")?.asInt ?: 1080
+                    val b = args.get("bottom")?.asInt ?: 2400
+                    val nodes = reader.readRegion(l, t, r, b)
+                    """{"region":[$l,$t,$r,$b],"nodes":$nodes}"""
                 }
                 "android_tap" -> {
                     val reader = ScreenReaderService.instance

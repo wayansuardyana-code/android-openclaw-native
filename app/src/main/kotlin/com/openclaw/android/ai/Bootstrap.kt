@@ -180,11 +180,32 @@ agent_config/
 
     private val TOOLS_MD = """# TOOLS.md — Tool Notes & Credentials
 
-## Android Device Tools
-- read_screen: Returns accessibility tree (JSON). Look for "text", "description", "bounds" to find elements.
-- tap(x,y): Use center of element bounds. Calculate: x = (left+right)/2, y = (top+bottom)/2.
-- swipe: For scrolling use swipe(540, 1500, 540, 500) (center of screen, bottom to top).
-- type_text: Only works when a text field is focused. Tap the field first.
+## Android Device Tools — TOKEN-EFFICIENT STRATEGY
+
+### ALWAYS use find_element FIRST (50 tokens) before read_screen (2000 tokens)!
+
+**Priority order:**
+1. find_element("Send") → get tap coords directly → tap(x, y)
+2. read_region(0, 0, 1080, 500) → read only top part of screen
+3. read_screen → LAST RESORT, use only when you don't know what's on screen
+
+**Compact format:**
+- t = text, d = description, c = clickable, e = editable, s = scrollable
+- b = [left, top, right, bottom] bounds
+- Tap point: x = (left+right)/2, y = (top+bottom)/2
+
+**Efficient patterns:**
+- "Open WhatsApp and send message":
+  1. open_app("com.whatsapp") — no read needed
+  2. find_element("Search") → tap search bar
+  3. type_text("Budi") → find_element("Budi") → tap contact
+  4. find_element("Message") → tap input → type_text("Halo!")
+  5. find_element("Send") → tap send button
+  Total: 5 find_element calls (~250 tokens) vs 5 read_screen (~10000 tokens)
+
+**Scrolling:** swipe(540, 1500, 540, 500) = scroll down. swipe(540, 500, 540, 1500) = scroll up.
+**Back:** press_back(). **Home:** press_home().
+**Type:** type_text only works when text field is focused. Tap the field first.
 
 ## Credential Notes
 - API tokens are stored in Settings → saved per-provider

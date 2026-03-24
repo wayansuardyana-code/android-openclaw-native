@@ -47,6 +47,12 @@ data class ChatMessage(
     val attachmentName: String? = null
 )
 
+// Persistent chat state — survives tab switches
+object ChatState {
+    val messages = mutableStateListOf<ChatMessage>()
+    fun clear() { messages.clear() }
+}
+
 // Slash commands
 private val SLASH_COMMANDS = listOf(
     "/" to "Show all commands",
@@ -69,7 +75,7 @@ private val SLASH_COMMANDS = listOf(
 
 @Composable
 fun ChatScreen() {
-    val messages = remember { mutableStateListOf<ChatMessage>() }
+    val messages = ChatState.messages
     var input by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var attachedFile by remember { mutableStateOf<Pair<String, String>?>(null) } // (name, content)
@@ -114,7 +120,7 @@ fun ChatScreen() {
 
         // Handle slash commands locally
         when {
-            text == "/clear" -> { messages.clear(); return }
+            text == "/clear" -> { ChatState.clear(); return }
             text == "/status" -> {
                 messages.add(ChatMessage("system", "Provider: ${AgentConfig.activeProvider}\nModel: ${config.model}\nAPI Key: ${if (hasApiKey) "Set" else "Not set"}\nTools: 17 (8 device + 9 utility)"))
                 return
@@ -197,7 +203,7 @@ ${if (customPrompt.isNotBlank()) "\n--- CUSTOM INSTRUCTIONS ---\n$customPrompt" 
                 Text("$activeProvider • ${config.model}", color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
             }
             if (messages.isNotEmpty()) {
-                IconButton(onClick = { messages.clear() }) {
+                IconButton(onClick = { ChatState.clear() }) {
                     Icon(Icons.Default.Delete, "Clear", tint = TEXT2, modifier = Modifier.size(20.dp))
                 }
             }

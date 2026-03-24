@@ -200,9 +200,13 @@ object UtilityTools {
     }
 
     private fun webScrape(url: String, selector: String?): String {
-        val doc = Jsoup.connect(url)
-            .userAgent("OpenClaw/1.0")
-            .timeout(10000)
+        val fullUrl = if (url.startsWith("http")) url else "https://$url"
+        val doc = Jsoup.connect(fullUrl)
+            .userAgent("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36")
+            .timeout(15000)
+            .followRedirects(true)
+            .ignoreHttpErrors(true)
+            .sslSocketFactory(trustAllSsl())
             .get()
 
         val title = doc.title()
@@ -212,24 +216,46 @@ object UtilityTools {
             doc.body().text().take(3000)
         }
 
-        return """{"title":"${title.replace("\"", "'")}","content":"${content.replace("\"", "'").replace("\n", " ").take(3000)}"}"""
+        val gson = Gson()
+        return """{"title":${gson.toJson(title)},"content":${gson.toJson(content.take(3000))}}"""
     }
 
     private fun webSearch(query: String): String {
-        // DuckDuckGo HTML search (no API key needed)
-        val doc = Jsoup.connect("https://html.duckduckgo.com/html/?q=${java.net.URLEncoder.encode(query, "UTF-8")}")
-            .userAgent("OpenClaw/1.0")
-            .timeout(10000)
+        val encoded = java.net.URLEncoder.encode(query, "UTF-8")
+        val doc = Jsoup.connect("https://html.duckduckgo.com/html/?q=$encoded")
+            .userAgent("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36")
+            .timeout(15000)
+            .followRedirects(true)
+            .ignoreHttpErrors(true)
+            .sslSocketFactory(trustAllSsl())
             .get()
 
         val results = doc.select(".result__body").take(5).mapIndexed { i, el ->
             val resultTitle = el.select(".result__title").text()
             val snippet = el.select(".result__snippet").text()
             val link = el.select(".result__url").text()
-            """{"rank":${i + 1},"title":"${resultTitle.replace("\"", "'")}","snippet":"${snippet.replace("\"", "'")}","url":"${link.replace("\"", "'")}"}"""
+            val gson = Gson()
+            """{"rank":${i + 1},"title":${gson.toJson(resultTitle)},"snippet":${gson.toJson(snippet)},"url":${gson.toJson(link)}}"""
         }
 
-        return """{"query":"${query.replace("\"", "'")}","results":[${results.joinToString(",")}]}"""
+        if (results.isEmpty()) {
+            // Fallback: try lite.duckduckgo.com
+            return """{"query":${Gson().toJson(query)},"results":[],"note":"No results found. Try web_scrape on a specific URL instead."}"""
+        }
+
+        return """{"query":${Gson().toJson(query)},"results":[${results.joinToString(",")}]}"""
+    }
+
+    /** Trust all SSL certs (needed on some Android devices with outdated root certs) */
+    private fun trustAllSsl(): javax.net.ssl.SSLSocketFactory {
+        val trustAll = arrayOf<javax.net.ssl.TrustManager>(object : javax.net.ssl.X509TrustManager {
+            override fun checkClientTrusted(chain: Array<java.security.cert.X509Certificate>?, authType: String?) {}
+            override fun checkServerTrusted(chain: Array<java.security.cert.X509Certificate>?, authType: String?) {}
+            override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = arrayOf()
+        })
+        val ctx = javax.net.ssl.SSLContext.getInstance("TLS")
+        ctx.init(null, trustAll, java.security.SecureRandom())
+        return ctx.socketFactory
     }
 
     private fun calculate(expression: String): String {

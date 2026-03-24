@@ -26,6 +26,7 @@ sealed class NavTab(val label: String, val icon: ImageVector) {
     data object Dashboard : NavTab("Home", Icons.Default.Dashboard)
     data object Connectors : NavTab("Connect", Icons.Default.Extension)
     data object Files : NavTab("Files", Icons.Default.Description)
+    data object Logs : NavTab("Logs", Icons.Default.Terminal)
     data object Settings : NavTab("Settings", Icons.Default.Settings)
 }
 
@@ -52,7 +53,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MainApp(onStartService: () -> Unit, onStopService: () -> Unit, onRequestPermissions: () -> Unit) {
-    val tabs = listOf(NavTab.Chat, NavTab.Dashboard, NavTab.Connectors, NavTab.Files, NavTab.Settings)
+    val tabs = listOf(NavTab.Chat, NavTab.Dashboard, NavTab.Connectors, NavTab.Files, NavTab.Logs, NavTab.Settings)
     var selectedTab by remember { mutableStateOf<NavTab>(NavTab.Chat) }
 
     val BG = Color(0xFF0D1117)
@@ -86,6 +87,7 @@ fun MainApp(onStartService: () -> Unit, onStopService: () -> Unit, onRequestPerm
                 NavTab.Dashboard -> DashboardScreen()
                 NavTab.Connectors -> ConnectorsScreen()
                 NavTab.Files -> FilesScreen()
+                NavTab.Logs -> LogScreen()
                 NavTab.Settings -> SettingsScreen(onStartService = onStartService, onStopService = onStopService)
             }
         }

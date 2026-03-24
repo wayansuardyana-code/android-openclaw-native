@@ -129,6 +129,11 @@ fun ConnectorCard(connector: ConnectorEntity, onUpdate: (ConnectorEntity) -> Uni
                             fieldValue = newVal
                             config[key] = newVal
                             onUpdate(connector.copy(configJson = gson.toJson(config)))
+                            // Persist tokens to AgentConfig for tool auth
+                            if (isSecret && newVal.isNotBlank()) {
+                                val providerId = connector.id.removePrefix("tool_").removePrefix("db_").removePrefix("ch_")
+                                com.openclaw.android.ai.AgentConfig.setKeyForProvider(providerId, newVal)
+                            }
                         },
                         label = { Text(key, fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
                         visualTransformation = if (isSecret && fieldValue.isNotEmpty()) PasswordVisualTransformation() else VisualTransformation.None,

@@ -199,8 +199,16 @@ app/src/main/kotlin/com/openclaw/android/
 │   ├── ScreenReaderService.kt   # Accessibility (eyes + hands)
 │   ├── NotificationReaderService.kt
 │   └── BootReceiver.kt          # Auto-start on boot
+├── ai/
+│   ├── LlmClient.kt            # Unified LLM client (13 providers)
+│   ├── AgentLoop.kt            # Tool-calling agent loop
+│   ├── AgentConfig.kt          # Persistent config (SharedPreferences)
+│   ├── AndroidTools.kt         # 8 device control tools
+│   ├── UtilityTools.kt         # 9 utility tools
+│   ├── ServiceTools.kt         # 5 authenticated API tools
+│   └── ToolDef.kt              # Tool schema definition
 ├── bridge/
-│   └── AndroidBridgeServer.kt   # REST API (15 endpoints)
+│   └── AndroidBridgeServer.kt   # REST API (16 endpoints)
 ├── data/
 │   ├── AppDatabase.kt           # Room database
 │   ├── ConnectorRegistry.kt     # 28 connector definitions
@@ -208,31 +216,38 @@ app/src/main/kotlin/com/openclaw/android/
 │   ├── entity/                  # DB entities
 │   └── dao/                     # DB access objects
 ├── ui/screens/
-│   ├── DashboardScreen.kt       # Mission Control
-│   ├── ConnectorsScreen.kt      # Tool configuration
-│   ├── FilesScreen.kt           # MD file editor
-│   ├── LogScreen.kt             # Log viewer
-│   └── SettingsScreen.kt        # LLM & app settings
+│   ├── ChatScreen.kt            # AI chat with slash commands + file attach
+│   ├── DashboardScreen.kt       # Mission Control + Kanban board
+│   ├── ConnectorsScreen.kt      # Tool configuration (persists tokens)
+│   ├── FilesScreen.kt           # MD file editor (saves to disk)
+│   ├── LogScreen.kt             # Log viewer + Terminal tab
+│   └── SettingsScreen.kt        # LLM provider + API keys + updates
 └── util/
     ├── ServiceState.kt          # Reactive state
-    └── PermissionHelper.kt      # Permission management
+    ├── PermissionHelper.kt      # Permission management
+    └── NotificationHelper.kt    # Push notifications
 ```
 
 ---
 
 ## Roadmap
 
-- [x] Phase 1a — Native app shell, bridge server, accessibility, notifications
-- [x] Phase 1a — Mission Control UI (dashboard, connectors, files, logs, settings)
-- [x] Phase 1a — Room database with vector search memory
-- [x] Phase 1a — 28 configurable connectors
-- [ ] Phase 1b — Node.js runtime (nodejs-mobile) for OpenClaw gateway
-- [ ] Phase 2 — Shizuku integration for ADB-level control
-- [ ] Phase 2 — MediaProjection screenshots
-- [ ] Phase 3 — LLM tool calling (AI controls phone end-to-end)
-- [ ] Phase 3 — Vision pipeline (screenshot → LLM → action)
-- [ ] Phase 4 — On-device model (Gemma 3n) for offline
-- [ ] Phase 4 — Quick Settings tile, home screen widget
+- [x] Native app shell, bridge server, accessibility, notifications
+- [x] Mission Control dashboard with kanban board
+- [x] Room database with vector search memory
+- [x] 28 configurable connectors with token persistence
+- [x] AI chat with 16 slash commands and file attachment
+- [x] 22 LLM tools (device + utility + service)
+- [x] 13 LLM providers with unified API
+- [x] Terminal tab with shell command execution
+- [x] Push notifications on agent response/error
+- [x] File editor with save to disk
+- [x] Service connectors (GitHub, Vercel, Supabase, Google Workspace)
+- [ ] Shizuku integration for ADB-level control
+- [ ] MediaProjection screenshots + vision pipeline
+- [ ] On-device model (Gemma 3n) for offline
+- [ ] Streaming LLM responses
+- [ ] Chat history persistence
 
 ---
 
@@ -241,9 +256,12 @@ app/src/main/kotlin/com/openclaw/android/
 | Metric | Value |
 |--------|-------|
 | APK size (debug) | ~26 MB |
-| Kotlin source files | 26 |
-| Lines of code | ~2,100 |
-| Bridge API endpoints | 15 |
+| Kotlin source files | 30 |
+| Lines of code | ~3,500 |
+| LLM tools | 22 (8 device + 9 utility + 5 service) |
+| LLM providers | 13 |
+| Slash commands | 16 |
+| Bridge API endpoints | 16 |
 | Connectors | 28 |
 | Min SDK | 24 (Android 7.0) |
 

@@ -140,9 +140,15 @@ github_api, vercel_api, supabase_query, google_workspace, authenticated_api
 - Service connectors (GitHub, Vercel, Supabase, Google Workspace)
 - Single toggle start/stop, check for updates, push notification toggle
 
-## TODO (remaining)
-- Dashboard: kanban board
-- Connectors UI: wire toggles to actual AgentConfig key storage
-- Push notifications: actual notification logic (not just toggle)
-- Chat history persistence to Room DB
-- Streaming LLM responses
+## v0.8.0 Complete Feature List
+- Dashboard: kanban board (Inbox/Active/Review/Done), add tasks, tap to advance
+- Connectors: tokens persist to AgentConfig on save (wired to tool auth)
+- Push notifications: fires on agent response + agent error
+- 22 LLM tools, 13 providers, slash commands, file attach, terminal
+- All core features working — app is usable for daily AI assistance
+
+## Remaining Nice-to-Have (not blocking)
+- Chat history persistence to Room DB (messages lost on restart)
+- Streaming LLM responses (currently waits for full response)
+- GWS CLI integration (Google Workspace via OAuth)
+- On-device model (Gemma 3n) — noted, not planned yet

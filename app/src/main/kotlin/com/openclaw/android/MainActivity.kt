@@ -23,9 +23,9 @@ import com.openclaw.android.util.PermissionHelper
 
 sealed class NavTab(val label: String, val icon: ImageVector) {
     data object Chat : NavTab("Chat", Icons.Default.Chat)
-    data object Dashboard : NavTab("Dashboard", Icons.Default.Dashboard)
+    data object Dashboard : NavTab("Home", Icons.Default.Dashboard)
     data object Connectors : NavTab("Connect", Icons.Default.Extension)
-    data object Logs : NavTab("Logs", Icons.Default.Terminal)
+    data object Files : NavTab("Files", Icons.Default.Description)
     data object Settings : NavTab("Settings", Icons.Default.Settings)
 }
 
@@ -52,7 +52,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MainApp(onStartService: () -> Unit, onStopService: () -> Unit, onRequestPermissions: () -> Unit) {
-    val tabs = listOf(NavTab.Chat, NavTab.Dashboard, NavTab.Connectors, NavTab.Logs, NavTab.Settings)
+    val tabs = listOf(NavTab.Chat, NavTab.Dashboard, NavTab.Connectors, NavTab.Files, NavTab.Settings)
     var selectedTab by remember { mutableStateOf<NavTab>(NavTab.Chat) }
 
     val BG = Color(0xFF0D1117)
@@ -85,7 +85,7 @@ fun MainApp(onStartService: () -> Unit, onStopService: () -> Unit, onRequestPerm
                 NavTab.Chat -> ChatScreen()
                 NavTab.Dashboard -> DashboardScreen()
                 NavTab.Connectors -> ConnectorsScreen()
-                NavTab.Logs -> LogScreen()
+                NavTab.Files -> FilesScreen()
                 NavTab.Settings -> SettingsScreen(onStartService = onStartService, onStopService = onStopService)
             }
         }

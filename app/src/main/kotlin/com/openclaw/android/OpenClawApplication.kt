@@ -18,6 +18,10 @@ class OpenClawApplication : Application() {
         instance = this
         createNotificationChannels()
         setupCrashHandler()
+        // Auto-bootstrap workspace files on app start
+        if (!com.openclaw.android.ai.Bootstrap.isBootstrapped()) {
+            com.openclaw.android.ai.Bootstrap.run()
+        }
     }
 
     private fun setupCrashHandler() {

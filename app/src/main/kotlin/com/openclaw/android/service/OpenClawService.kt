@@ -46,9 +46,15 @@ class OpenClawService : Service() {
         ServiceState.setRunning(true)
         ServiceState.addLog("Service started")
 
+        // Stop old bridge server if exists (prevents "Address already in use")
+        bridgeServer?.stop()
+        bridgeServer = null
+
         // Start bridge server
         scope.launch {
             try {
+                // Small delay to let old port release
+                kotlinx.coroutines.delay(500)
                 bridgeServer = AndroidBridgeServer(applicationContext)
                 bridgeServer?.start()
                 ServiceState.addLog("Bridge server started on :18790")
@@ -62,7 +68,7 @@ class OpenClawService : Service() {
         ServiceState.addLog("Node.js runtime: not yet integrated (Phase 1b)")
         ServiceState.addLog("Bridge API ready at http://localhost:18790")
 
-        return START_STICKY
+        return START_NOT_STICKY  // Don't auto-restart (BootReceiver handles that)
     }
 
     override fun onDestroy() {

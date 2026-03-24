@@ -24,6 +24,19 @@ import kotlinx.coroutines.*
 class TelegramBotService {
 
     private val gson = Gson()
+
+    /** Parse JSON leniently — handles malformed responses */
+    private fun parseJson(text: String): JsonObject? {
+        if (text.isBlank() || !text.trimStart().startsWith("{")) return null
+        return try {
+            val reader = com.google.gson.stream.JsonReader(java.io.StringReader(text))
+            reader.isLenient = true
+            gson.fromJson(reader, JsonObject::class.java)
+        } catch (e: Exception) {
+            ServiceState.addLog("Telegram: JSON parse error — ${e.message?.take(80)}")
+            null
+        }
+    }
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var pollingJob: Job? = null
     private var lastUpdateId: Long = 0
@@ -93,7 +106,7 @@ class TelegramBotService {
                 parameter("limit", 1)
                 parameter("timeout", 0)
             }
-            val flushJson = gson.fromJson(flushResp.bodyAsText(), JsonObject::class.java)
+            val flushJson = parseJson(flushResp.bodyAsText()) ?: JsonObject()
             if (flushJson.get("ok")?.asBoolean == true) {
                 val results = flushJson.getAsJsonArray("result")
                 if (results != null && results.size() > 0) {
@@ -115,7 +128,7 @@ class TelegramBotService {
                 }
 
                 val body = response.bodyAsText()
-                val json = gson.fromJson(body, JsonObject::class.java)
+                val json = parseJson(body) ?: continue
 
                 if (json.get("ok")?.asBoolean != true) {
                     val desc = json.get("description")?.asString ?: "unknown error"
@@ -207,7 +220,7 @@ class TelegramBotService {
             setBody(body.toString())
         }
 
-        val respJson = gson.fromJson(response.bodyAsText(), JsonObject::class.java)
+        val respJson = parseJson(response.bodyAsText()) ?: JsonObject()
         if (respJson.get("ok")?.asBoolean != true) {
             // Retry without Markdown parse_mode (in case of formatting errors)
             val plainBody = JsonObject().apply {

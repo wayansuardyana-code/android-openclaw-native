@@ -243,7 +243,7 @@ ${if (customPrompt.isNotBlank()) "\n--- CUSTOM INSTRUCTIONS ---\n$customPrompt" 
             if (isLoading) {
                 item {
                     Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(color = CYAN, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Text("●", color = CYAN, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
                         Spacer(Modifier.width(8.dp))
                         Text("Thinking...", color = TEXT2, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
                     }

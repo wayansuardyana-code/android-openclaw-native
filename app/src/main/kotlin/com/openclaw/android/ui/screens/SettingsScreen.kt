@@ -293,7 +293,7 @@ fun SettingsScreen(
                         },
                         enabled = !checkingUpdate, colors = ButtonDefaults.buttonColors(containerColor = CYAN), shape = RoundedCornerShape(8.dp)
                     ) {
-                        if (checkingUpdate) CircularProgressIndicator(color = TEXT, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        if (checkingUpdate) Text("...", color = TEXT, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
                         else { Icon(Icons.Default.SystemUpdate, null, Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text("Check Updates", fontFamily = FontFamily.Monospace, fontSize = 12.sp) }
                     }
                 }

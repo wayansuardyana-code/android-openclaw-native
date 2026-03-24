@@ -104,24 +104,16 @@ object ChatState {
     }
 }
 
-// Slash commands
+// Slash commands — only for local actions (no LLM needed)
 private val SLASH_COMMANDS = listOf(
     "/" to "Show all commands",
-    "/help" to "Show help and available tools",
-    "/tools" to "List all available AI tools",
-    "/status" to "Show service status",
+    "/help" to "Show available commands",
+    "/tools" to "List all active tools",
+    "/status" to "Show service & connection status",
     "/clear" to "Clear chat history",
-    "/screen" to "Read current screen content",
-    "/notifications" to "Read all notifications",
-    "/battery" to "Check battery level",
-    "/search " to "Search the web",
-    "/scrape " to "Scrape a URL",
-    "/calc " to "Calculate math expression",
-    "/shell " to "Run a shell command",
-    "/open " to "Open an app by package name",
-    "/files " to "List files in directory",
-    "/identity" to "Show current identity.md",
-    "/prompt" to "Show current system prompt",
+    "/identity" to "View identity.md",
+    "/prompt" to "View system prompt",
+    "/shell " to "Run a shell command directly",
 )
 
 @Composable
@@ -241,19 +233,10 @@ fun ChatScreen() {
             }
         }
 
-        // Convert slash shortcuts to natural language for the AI
-        val actualMessage = when {
-            text.startsWith("/screen") -> "Read my current screen content and describe what you see"
-            text.startsWith("/notifications") -> "Read all my current notifications"
-            text.startsWith("/battery") -> "What's my battery level?"
-            text.startsWith("/search ") -> "Search the web for: ${text.removePrefix("/search ")}"
-            text.startsWith("/scrape ") -> "Scrape this URL and summarize: ${text.removePrefix("/scrape ")}"
-            text.startsWith("/calc ") -> "Calculate: ${text.removePrefix("/calc ")}"
-            text.startsWith("/shell ") -> "Run this shell command: ${text.removePrefix("/shell ")}"
-            text.startsWith("/open ") -> "Open the app: ${text.removePrefix("/open ")}"
-            text.startsWith("/files ") -> "List files in: ${text.removePrefix("/files ")}"
-            else -> text
-        }
+        // /shell runs directly without LLM, everything else goes to AI
+        val actualMessage = if (text.startsWith("/shell ")) {
+            "Run this shell command: ${text.removePrefix("/shell ")}"
+        } else text
 
         val displayMsg = if (attachedFile != null) "$actualMessage\n[Attached: ${attachedFile!!.first}]" else actualMessage
         ChatState.addMessage(ChatMessage("user", displayMsg, attachmentName = attachedFile?.first))

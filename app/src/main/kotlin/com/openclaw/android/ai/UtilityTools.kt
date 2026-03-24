@@ -81,7 +81,7 @@ object UtilityTools {
         ),
         ToolDef(
             name = "write_file",
-            description = "Write content to a file on the device. Creates parent directories if needed.",
+            description = "Write content to a file on the device. Creates parent directories if needed. WARNING: Do NOT use this for workspace/config files (SOUL.md, USER.md, memory.md, etc.) — use update_workspace_file instead!",
             inputSchema = mapOf(
                 "type" to "object",
                 "properties" to mapOf(
@@ -147,6 +147,29 @@ object UtilityTools {
             inputSchema = mapOf("type" to "object", "properties" to emptyMap<String, Any>())
         ),
         ToolDef(
+            name = "read_workspace_file",
+            description = "Read a workspace or agent config file by name. Available files: SOUL.md, USER.md, AGENTS.md, TOOLS.md, HEARTBEAT.md (workspace), identity.md, system_prompt.md, memory.md, skills.md, bootstrap.md (agent_config). Use this to check current content before updating.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "name" to mapOf("type" to "string", "description" to "File name, e.g. 'USER.md', 'memory.md'")
+                ),
+                "required" to listOf("name")
+            )
+        ),
+        ToolDef(
+            name = "update_workspace_file",
+            description = "Update a workspace or agent config file by name. Use to save learned facts to memory.md, update USER.md with owner info, customize identity.md, add custom instructions to system_prompt.md, etc. The file is overwritten with the new content. Available files: SOUL.md, USER.md, AGENTS.md, TOOLS.md, HEARTBEAT.md, identity.md, system_prompt.md, memory.md, skills.md, bootstrap.md.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "name" to mapOf("type" to "string", "description" to "File name, e.g. 'USER.md', 'memory.md'"),
+                    "content" to mapOf("type" to "string", "description" to "New file content (replaces entire file)")
+                ),
+                "required" to listOf("name", "content")
+            )
+        ),
+        ToolDef(
             name = "generate_xlsx",
             description = "Generate an Excel (.xlsx) file with headers and rows. Saved to app documents folder.",
             inputSchema = mapOf(
@@ -201,6 +224,35 @@ object UtilityTools {
                     val completed = SubAgentManager.getCompletedResults()
                     val gson = Gson()
                     """{"running":${running.size},"completed":${completed.size},"agents":${gson.toJson(running.map { mapOf("id" to it.id, "title" to it.title, "status" to it.status) } + completed.map { mapOf("id" to it.id, "title" to it.title, "status" to it.status, "result" to (it.result?.take(500) ?: "")) })}}"""
+                }
+                "read_workspace_file" -> {
+                    val fileName = args.get("name").asString
+                    val content = Bootstrap.readFile(fileName)
+                    if (content.isBlank()) """{"error":"File not found or empty: $fileName"}"""
+                    else """{"name":"$fileName","content":${Gson().toJson(content)}}"""
+                }
+                "update_workspace_file" -> {
+                    val fileName = args.get("name").asString
+                    val content = args.get("content").asString
+                    val validFiles = setOf("SOUL.md", "USER.md", "AGENTS.md", "TOOLS.md", "HEARTBEAT.md",
+                        "identity.md", "system_prompt.md", "memory.md", "skills.md", "bootstrap.md")
+                    if (fileName !in validFiles) {
+                        """{"error":"Invalid file name: $fileName. Valid: ${validFiles.joinToString(", ")}"}"""
+                    } else {
+                        val wsDir = File(OpenClawApplication.instance.filesDir, "workspace")
+                        val cfgDir = File(OpenClawApplication.instance.filesDir, "agent_config")
+                        val wsFile = File(wsDir, fileName)
+                        val cfgFile = File(cfgDir, fileName)
+                        val target = when {
+                            wsFile.exists() -> wsFile
+                            cfgFile.exists() -> cfgFile
+                            fileName.uppercase() == fileName -> { wsDir.mkdirs(); File(wsDir, fileName) }
+                            else -> { cfgDir.mkdirs(); File(cfgDir, fileName) }
+                        }
+                        target.writeText(content)
+                        ServiceState.addLog("Workspace updated: $fileName (${content.length} chars)")
+                        """{"success":true,"name":"$fileName","size":${target.length()}}"""
+                    }
                 }
                 else -> """{"error":"Unknown tool: $name"}"""
             }

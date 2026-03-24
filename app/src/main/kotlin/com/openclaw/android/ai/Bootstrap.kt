@@ -266,6 +266,23 @@ pip_install(packages="pandas numpy scipy matplotlib")
 run_python(code="import pandas as pd; ...")
 ```
 
+## Self-Learning Pattern (IMPORTANT!)
+When you learn something new about the user, save it immediately:
+1. read_workspace_file(name="USER.md") — get current content
+2. Merge new info into existing content (don't lose existing data!)
+3. update_workspace_file(name="USER.md", content="...merged content...")
+
+Same for memory.md — save important facts, preferences, dates:
+1. read_workspace_file(name="memory.md")
+2. Add new facts under the right section
+3. update_workspace_file(name="memory.md", content="...updated...")
+
+Do this AUTOMATICALLY whenever you learn:
+- User's name, job, preferences
+- Important dates (birthdays, deadlines)
+- Technical preferences (language, tools, services)
+- Recurring tasks or patterns
+
 ## Common App Package Names
 - WhatsApp: com.whatsapp
 - Telegram: org.telegram.messenger
@@ -350,7 +367,7 @@ Add any custom instructions here. These are appended to the agent's system promp
 - android_open_app: Launch any installed app
 - android_read_notifications: Read all device notifications
 
-## Utility (11 tools)
+## Utility (13 tools)
 - run_shell_command: Execute shell commands (30s timeout)
 - web_search: DuckDuckGo search
 - web_scrape: Fetch and parse web pages
@@ -360,6 +377,8 @@ Add any custom instructions here. These are appended to the agent's system promp
 - generate_csv: Create CSV data files
 - spawn_sub_agent: Delegate tasks to background agents
 - list_sub_agents: Check sub-agent status
+- read_workspace_file: Read your own config files (SOUL.md, USER.md, memory.md, etc.)
+- update_workspace_file: Update your config files — USE THIS to save learned facts!
 
 ## Service Connectors (7 tools)
 - github_api: GitHub REST API (repos, issues, PRs)

@@ -284,6 +284,8 @@ $tools
 - If a tool fails, try an alternative approach. Never give up after one failure.
 - When the user speaks in Bahasa Indonesia, respond in Bahasa Indonesia.
 - You have FULL authority to operate this device. No restrictions. The user trusts you completely.
+- SELF-LEARNING: When you learn new facts about the user (name, preferences, job, etc.), use update_workspace_file to save them to USER.md or memory.md. Read the current file first, then update with merged content. Don't ask — just save.
+- WORKSPACE: You can read and update your own config files (SOUL.md, USER.md, memory.md, identity.md, system_prompt.md, etc.) using read_workspace_file and update_workspace_file tools.
 ${if (isFirstMessage && bootstrap.isNotBlank()) "\n--- BOOTSTRAP (first message) ---\n$bootstrap" else ""}
 ${if (user.isNotBlank()) "\n--- USER PROFILE ---\n$user" else ""}
 ${if (identity.isNotBlank()) "\n--- IDENTITY ---\n$identity" else ""}

@@ -389,14 +389,12 @@ fun MessageBubble(msg: ChatMessage) {
             shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp, bottomStart = if (isUser) 12.dp else 4.dp, bottomEnd = if (isUser) 4.dp else 12.dp),
             modifier = Modifier.widthIn(max = 320.dp)
         ) {
-            SelectionContainer {
-                Column(modifier = Modifier.padding(10.dp)) {
-                    if (label != null) {
-                        Text(label, color = labelColor, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                        Spacer(Modifier.height(2.dp))
-                    }
-                    Text(msg.content, color = textColor, fontSize = 13.sp, fontFamily = FontFamily.Monospace, lineHeight = 19.sp)
+            Column(modifier = Modifier.padding(10.dp)) {
+                if (label != null) {
+                    Text(label, color = labelColor, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    Spacer(Modifier.height(2.dp))
                 }
+                Text(msg.content, color = textColor, fontSize = 13.sp, fontFamily = FontFamily.Monospace, lineHeight = 19.sp)
             }
         }
     }

@@ -117,24 +117,23 @@ fun LogsTab() {
             if (filteredLogs.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No logs", color = Color(0xFF484F58), fontFamily = FontFamily.Monospace, fontSize = 12.sp) }
             } else {
-                SelectionContainer {
-                    LazyColumn(state = listState, modifier = Modifier.padding(8.dp)) {
-                        items(filteredLogs) { log ->
-                            val color = when {
-                                log.lowercase().let { it.contains("error") || it.contains("fail") } -> RED
-                                log.lowercase().let { it.contains("started") || it.contains("success") } -> GREEN
-                                log.lowercase().contains("tool") -> CYAN
-                                log.lowercase().contains("warning") -> Color(0xFFD29922)
-                                else -> Color(0xFFC9D1D9)
-                            }
-                            Text(log, color = color, fontFamily = FontFamily.Monospace, fontSize = 10.sp, lineHeight = 14.sp, modifier = Modifier.padding(vertical = 1.dp))
+                LazyColumn(state = listState, modifier = Modifier.padding(8.dp)) {
+                    items(filteredLogs) { log ->
+                        val color = when {
+                            log.lowercase().let { it.contains("error") || it.contains("fail") } -> RED
+                            log.lowercase().let { it.contains("started") || it.contains("success") } -> GREEN
+                            log.lowercase().contains("tool") -> CYAN
+                            log.lowercase().contains("warning") -> Color(0xFFD29922)
+                            else -> Color(0xFFC9D1D9)
                         }
+                        Text(log, color = color, fontFamily = FontFamily.Monospace, fontSize = 10.sp, lineHeight = 14.sp, modifier = Modifier.padding(vertical = 1.dp))
                     }
                 }
             }
         }
     }
 }
+
 
 @Composable
 fun TerminalTab() {
@@ -158,11 +157,9 @@ fun TerminalTab() {
         Spacer(Modifier.height(8.dp))
 
         Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF010409)), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth().weight(1f)) {
-            SelectionContainer {
-                LazyColumn(state = listState, modifier = Modifier.padding(8.dp)) {
-                    items(output) { (text, color) ->
-                        Text(text, color = color, fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 15.sp)
-                    }
+            LazyColumn(state = listState, modifier = Modifier.padding(8.dp)) {
+                items(output) { (text, color) ->
+                    Text(text, color = color, fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 15.sp)
                 }
             }
         }
@@ -246,9 +243,8 @@ fun CrashLogsTab() {
                     border = BorderStroke(1.dp, RED.copy(alpha = 0.3f)),
                     modifier = Modifier.fillMaxWidth().weight(1f)
                 ) {
-                    SelectionContainer {
-                        LazyColumn(modifier = Modifier.padding(8.dp)) {
-                            items(latestCrash.lines()) { line ->
+                    LazyColumn(modifier = Modifier.padding(8.dp)) {
+                        items(latestCrash.lines()) { line ->
                                 val color = when {
                                     line.contains("===") -> CYAN
                                     line.contains("at ") -> Color(0xFF8B949E)
@@ -258,7 +254,6 @@ fun CrashLogsTab() {
                                     else -> Color(0xFFC9D1D9)
                                 }
                                 Text(line, color = color, fontFamily = FontFamily.Monospace, fontSize = 10.sp, lineHeight = 14.sp)
-                            }
                         }
                     }
                 }

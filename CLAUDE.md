@@ -88,14 +88,15 @@ POST /agent/chat                  # {message, provider, apiKey, model, baseUrl} 
 - POST /agent/chat endpoint accepts {message, provider, apiKey, model, baseUrl}
 - Max 10 tool-calling steps per agent run
 
-## LLM Tools (22 total)
+## LLM Tools (24 total)
 ### Android Device Tools (8)
 android_read_screen, android_tap, android_swipe, android_type_text,
 android_press_back, android_press_home, android_open_app, android_read_notifications
 
-### Utility Tools (9)
+### Utility Tools (11)
 run_shell_command, web_scrape, web_search, calculator,
-read_file, write_file, list_files, generate_csv, http_request
+read_file, write_file, list_files, generate_csv, http_request,
+spawn_sub_agent, list_sub_agents
 
 ### Service Tools (5) — require API tokens
 github_api, vercel_api, supabase_query, google_workspace, authenticated_api
@@ -140,7 +141,24 @@ github_api, vercel_api, supabase_query, google_workspace, authenticated_api
 - Service connectors (GitHub, Vercel, Supabase, Google Workspace)
 - Single toggle start/stop, check for updates, push notification toggle
 
-## v0.8.0 Complete Feature List
+## Sub-Agent System
+- SubAgentManager: orchestrator pattern, main agent spawns background tasks
+- spawn_sub_agent tool: LLM delegates work, chat stays responsive
+- Tasks auto-flow through kanban: Pending → Active → Done
+- Push notification on completion/failure
+- list_sub_agents: check running/completed agents
+
+## ModelRegistry
+- 50+ models across 13 providers
+- Per-provider model dropdown (no typing)
+- Mirrors OpenClaw ecosystem model support
+
+## Dashboard Hardware Monitor
+- Real-time: RAM usage/total, storage used/free, battery level
+- LLM token tracker
+- Refreshes every 5 seconds
+
+## v0.9.0 Complete Feature List (replaces v0.8.0)
 - Dashboard: kanban board (Inbox/Active/Review/Done), add tasks, tap to advance
 - Connectors: tokens persist to AgentConfig on save (wired to tool auth)
 - Push notifications: fires on agent response + agent error

@@ -1,121 +1,147 @@
 # OpenClaw Android Native
 
-> AI agent with full Android device control — no root required.
+> Autonomous AI agent with full Android device control — no root required.
 
-Replace Termux-based AI assistants with a native Android app that can see your screen, read your notifications, tap buttons, open apps, and control your entire phone through natural language.
+Turn your phone into an AI-controlled device. OpenClaw can see your screen, tap buttons, type text, open apps, read notifications, browse the web, run Python scripts, generate files, and connect to external services — all through natural language.
 
 ---
 
-## What This Does
+## Quick Start
 
-OpenClaw Android Native turns your phone into an AI-controlled device. The app runs as a persistent service with system-level access:
+1. Download APK from [Releases](https://github.com/wayansuardyana-code/android-openclaw-native/releases)
+2. Install → Open → Settings → Add LLM provider (tap +) → Paste API token
+3. Chat → Start talking → AI controls your phone
 
-- **See everything** — reads the screen of any app via AccessibilityService
-- **Control everything** — taps, swipes, types text in any app
-- **Read all notifications** — WhatsApp messages, bank OTPs, emails
-- **Open any app** — launch apps by package name
-- **Access hardware** — camera, GPS, microphone, sensors
-- **Read contacts, SMS, calendar** — full ContentProvider access
-- **Generate files** — Excel (XLSX), CSV, PDF
-- **Connect to databases** — PostgreSQL, SQLite
-- **SSH into servers** — remote shell access
-- **Scrape the web** — fetch and parse any webpage
-- **Run on boot** — auto-starts with your phone
-
-All without rooting your device.
+**Updates:** Settings → Check Updates → auto-downloads + installs. All settings preserved.
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  ANDROID NATIVE APP (Kotlin + Jetpack Compose)      │
-│                                                     │
-│  ┌───────────────────────────────────────────────┐  │
-│  │  SYSTEM LAYER                                 │  │
-│  │  AccessibilityService · NotificationListener  │  │
-│  │  MediaProjection · Shizuku · ContentProviders │  │
-│  └──────────────────┬────────────────────────────┘  │
-│                     │ localhost HTTP                  │
-│  ┌──────────────────▼────────────────────────────┐  │
-│  │  BRIDGE SERVER (Ktor, :18790)                 │  │
-│  │  15 REST endpoints for device control         │  │
-│  └──────────────────┬────────────────────────────┘  │
-│                     │                                │
-│  ┌──────────────────▼────────────────────────────┐  │
-│  │  AI BRAIN                                     │  │
-│  │  LLM providers · Channels · Tool pipeline     │  │
-│  └───────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│  ANDROID NATIVE APP (Kotlin + Jetpack Compose)   │
+│                                                  │
+│  ┌──────────────────────────────────────────┐    │
+│  │  SYSTEM LAYER                            │    │
+│  │  Accessibility · Notifications           │    │
+│  │  MediaProjection · Shizuku               │    │
+│  └────────────────┬─────────────────────────┘    │
+│                   │ localhost HTTP                │
+│  ┌────────────────▼─────────────────────────┐    │
+│  │  BRIDGE SERVER (Ktor, :18790)            │    │
+│  │  16 REST endpoints · Agent chat API      │    │
+│  └────────────────┬─────────────────────────┘    │
+│                   │                              │
+│  ┌────────────────▼─────────────────────────┐    │
+│  │  AI BRAIN                                │    │
+│  │  31 tools · Sub-agents · Python runtime  │    │
+│  │  Conversation memory · Auto-compaction   │    │
+│  └──────────────────────────────────────────┘    │
+│                                                  │
+│  ┌──────────────────────────────────────────┐    │
+│  │  STORAGE                                 │    │
+│  │  Room SQLite: chat history, memories,    │    │
+│  │  tasks, connectors, agent sessions       │    │
+│  │  Vector search: cosine similarity        │    │
+│  │  Workspace files: SOUL.md, USER.md, etc  │    │
+│  └──────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Screenshots
+## Features
 
-| Dashboard | Connectors | Settings |
-|:---------:|:----------:|:--------:|
-| Mission Control with status, quick actions, task kanban, logs | 28 configurable connectors grouped by category | LLM provider selection, API keys, service control |
+### AI Chat
+- Natural language conversation with tool-calling AI agent
+- 16 slash commands (`/tools`, `/search`, `/screen`, `/shell`, etc.)
+- File attachment (paperclip icon)
+- Voice input (mic icon, Android SpeechRecognizer)
+- Tap message to copy
+- Chat history persists in SQLite (survives restarts + updates)
+- Auto-compaction at 70% context window
+- Token counter: `1.2k / 80k`
+
+### Device Control (8 tools)
+- Read screen content of any app (accessibility tree)
+- Tap, swipe, type text at coordinates
+- Open any installed app
+- Read all device notifications
+- Press back/home buttons
+
+### Utility Tools (13 tools)
+- Shell command execution (30s timeout)
+- Web search (DuckDuckGo, free)
+- Web scraping (Jsoup)
+- HTTP requests (any REST API)
+- Calculator (exp4j math expressions)
+- File read/write/list
+- CSV, Excel (XLSX), PDF generation
+- Sub-agent spawning (background task delegation)
+- Python 3.13 runtime (on-device, no root)
+
+### Service Connectors (7 tools)
+- GitHub REST API
+- Vercel REST API
+- Supabase PostgREST
+- Google Workspace (Drive, Sheets, Gmail, Calendar)
+- SSH remote execution
+- PostgreSQL via SSH tunnel
+- Generic authenticated REST API
+
+### Python Runtime
+- Portable Python 3.13 (musl-static, ~27MB)
+- Auto-downloads on first use
+- pip install any package (pandas, matplotlib, etc.)
+- Enables: markitdown, data analysis, infographic generation
+
+### Telegram Bot
+- Long-polling bot connector
+- Control phone from Telegram
+- Full tool access from Telegram messages
+- Add bot token in Connect → Developer Tools
+
+### Dashboard
+- Mission Control with status grid
+- Hardware monitor (RAM, storage, battery, tokens)
+- Kanban board (Pending → Active → Done)
+- Auto-managed by agent (orchestrator pattern)
+
+### Workspace Files (auto-bootstrapped)
+- `SOUL.md` — Agent personality and identity
+- `USER.md` — Owner profile and preferences
+- `AGENTS.md` — Workspace conventions
+- `TOOLS.md` — Tool usage notes and credentials
+- `HEARTBEAT.md` — Self-check patterns
+- `identity.md`, `system_prompt.md`, `memory.md`, `skills.md`, `bootstrap.md`
+
+### Settings
+- 13 LLM providers (dynamic, add with +)
+- Model dropdown per provider (50+ models)
+- Token management (eye toggle, copy, delete)
+- Auto-updater (Check Updates → download → install)
+- Push notifications toggle
 
 ---
 
-## Bridge API
+## LLM Providers
 
-The app runs a localhost HTTP server exposing Android capabilities:
-
-```bash
-# Screen control
-GET  /android/screen              # Full accessibility tree (JSON)
-POST /android/tap                 # {"x": 500, "y": 800}
-POST /android/swipe               # {"x1": 100, "y1": 500, "x2": 100, "y2": 200}
-POST /android/type                # {"text": "hello world"}
-
-# Navigation
-POST /android/back
-POST /android/home
-POST /android/open-app            # {"packageName": "com.whatsapp"}
-
-# Notifications
-GET  /android/notifications       # All active notifications
-GET  /android/notifications/recent
-
-# Device
-GET  /android/battery             # {"level": 63, "charging": false}
-POST /android/volume              # {"level": 50, "stream": "music"}
-GET  /android/contacts            # Contact list
-GET  /android/health              # Service status
-```
-
----
-
-## Connectors (28 built-in)
-
-### LLM Providers
-| Connector | Models |
-|-----------|--------|
-| Anthropic Claude | Sonnet, Opus, Haiku |
-| OpenAI | GPT-5, GPT-4o, o-series |
-| Google Gemini | Gemini 3.1, 2.5 Pro/Flash |
-| MiniMax | M2.5 |
-| OpenRouter | Multi-provider gateway |
-| Ollama | Self-hosted local models |
-| Custom API | Any OpenAI-compatible endpoint |
-
-### Channels
-Telegram Bot, Discord Bot, Native SMS
-
-### Developer Tools
-Terminal/Shell, SSH Remote, GitHub, Vercel, Web Scraper, Web Search, Calculator, Python (via SSH)
-
-### Databases
-PostgreSQL (via HTTP proxy), SQLite (built-in with vector search)
-
-### File Generation
-Excel (XLSX), CSV, PDF
-
-### Skills & Extensions
-ClawHub registry, GitHub repos, Custom local skills
+| Provider | Models |
+|----------|--------|
+| Anthropic | Claude Opus/Sonnet/Haiku 4.x |
+| OpenAI | GPT-5.4, GPT-4.1, o3/o4 |
+| MiniMax | M2.7, VL-01, M2.5 |
+| Google | Gemini 2.5 Pro/Flash |
+| DeepSeek | V3, R1 |
+| Mistral | Large, Small, Codestral |
+| Groq | Llama 3.3, Mixtral, Gemma |
+| xAI | Grok 2, Grok 3 |
+| Together AI | Llama, Qwen, DeepSeek |
+| Fireworks | Llama, Qwen |
+| OpenRouter | Any model |
+| Ollama | Local models |
+| Custom | Any OpenAI-compatible API |
 
 ---
 
@@ -125,66 +151,17 @@ ClawHub registry, GitHub repos, Custom local skills
 |-----------|------------|
 | Language | Kotlin 1.9 |
 | UI | Jetpack Compose + Material 3 |
-| Database | Room (SQLite) + cosine similarity vector search |
+| Database | Room (SQLite) + vector search |
 | HTTP Server | Ktor (Netty) |
 | HTTP Client | Ktor + OkHttp |
 | Excel | FastExcel |
+| PDF | Android PdfDocument |
 | Web Scraping | Jsoup |
 | SSH | SSHJ |
 | CSV | kotlin-csv |
 | Math | exp4j |
-| Privilege | Shizuku (ADB-level without root) |
-
----
-
-## Device Compatibility
-
-| | Supported |
-|---|---|
-| **Min Android** | 7.0 (API 24) |
-| **Architectures** | arm64-v8a, armeabi-v7a, x86_64 |
-| **Coverage** | 99%+ of active Android devices |
-| **Root required** | No |
-| **Google Play Services** | Not required |
-
-### Permission Tiers
-
-| Tier | What You Get |
-|------|-------------|
-| **Standard** (dialog grant) | Camera, mic, GPS, contacts, SMS, calendar, storage |
-| **Special** (enable in Settings) | Accessibility (full UI control), Notification reading, Overlay, All files |
-| **Shizuku** (one-time ADB) | Silent app install, input injection, hidden APIs, system settings |
-
----
-
-## Build
-
-```bash
-# Prerequisites
-# - JDK 17
-# - Android SDK (API 34, Build Tools 34.0.0)
-
-export ANDROID_HOME=/path/to/android-sdk
-
-# Debug build
-./gradlew assembleDebug
-
-# APK location
-ls app/build/outputs/apk/debug/app-debug.apk
-```
-
----
-
-## Install
-
-1. Download the APK to your phone
-2. Enable **Install from Unknown Sources** for your file manager
-3. Install the APK
-4. Open OpenClaw
-5. Tap **Permissions** to grant runtime permissions
-6. Enable **Accessibility Service** in Settings > Accessibility > OpenClaw
-7. Enable **Notification Access** in Settings > Apps > Special Access
-8. Tap **Start** to launch the service
+| Speech | Android SpeechRecognizer |
+| Python | Portable musl-static 3.13 |
 
 ---
 
@@ -193,61 +170,47 @@ ls app/build/outputs/apk/debug/app-debug.apk
 ```
 app/src/main/kotlin/com/openclaw/android/
 ├── MainActivity.kt              # 5-tab navigation
-├── OpenClawApplication.kt       # App init
+├── OpenClawApplication.kt       # App init + crash handler
+├── ai/
+│   ├── LlmClient.kt            # Unified LLM client (13 providers)
+│   ├── AgentLoop.kt             # Tool-calling agent loop
+│   ├── AgentConfig.kt           # Persistent config (SharedPreferences)
+│   ├── AndroidTools.kt          # Device control tools
+│   ├── UtilityTools.kt          # Shell, web, files, CSV, XLSX, PDF
+│   ├── ServiceTools.kt          # GitHub, Vercel, Supabase, SSH, Postgres
+│   ├── PythonRuntime.kt         # Portable Python on Android
+│   ├── SubAgentManager.kt       # Background task delegation
+│   ├── ConversationManager.kt   # Token tracking + auto-compaction
+│   ├── ModelRegistry.kt         # 50+ models per provider
+│   ├── Bootstrap.kt             # Workspace file initialization
+│   └── ToolDef.kt               # Tool schema
 ├── service/
 │   ├── OpenClawService.kt       # Foreground service
 │   ├── ScreenReaderService.kt   # Accessibility (eyes + hands)
 │   ├── NotificationReaderService.kt
+│   ├── TelegramBotService.kt    # Telegram bot polling
 │   └── BootReceiver.kt          # Auto-start on boot
-├── ai/
-│   ├── LlmClient.kt            # Unified LLM client (13 providers)
-│   ├── AgentLoop.kt            # Tool-calling agent loop
-│   ├── AgentConfig.kt          # Persistent config (SharedPreferences)
-│   ├── AndroidTools.kt         # 8 device control tools
-│   ├── UtilityTools.kt         # 9 utility tools
-│   ├── ServiceTools.kt         # 5 authenticated API tools
-│   └── ToolDef.kt              # Tool schema definition
 ├── bridge/
 │   └── AndroidBridgeServer.kt   # REST API (16 endpoints)
 ├── data/
-│   ├── AppDatabase.kt           # Room database
-│   ├── ConnectorRegistry.kt     # 28 connector definitions
-│   ├── VectorSearch.kt          # Memory vector search
-│   ├── entity/                  # DB entities
-│   └── dao/                     # DB access objects
+│   ├── AppDatabase.kt           # Room database (v2)
+│   ├── entity/                  # ChatMessage, Connector, Task, Memory, AgentSession
+│   ├── dao/                     # CRUD + search
+│   ├── ConnectorRegistry.kt     # Service definitions
+│   └── VectorSearch.kt          # Cosine similarity
 ├── ui/screens/
-│   ├── ChatScreen.kt            # AI chat with slash commands + file attach
-│   ├── DashboardScreen.kt       # Mission Control + Kanban board
-│   ├── ConnectorsScreen.kt      # Tool configuration (persists tokens)
-│   ├── FilesScreen.kt           # MD file editor (saves to disk)
-│   ├── LogScreen.kt             # Log viewer + Terminal tab
-│   └── SettingsScreen.kt        # LLM provider + API keys + updates
+│   ├── ChatScreen.kt            # AI chat + slash commands + voice
+│   ├── DashboardScreen.kt       # Mission Control + kanban + hardware
+│   ├── ConnectorsScreen.kt      # Services + active skills
+│   ├── FilesScreen.kt           # Workspace file editor
+│   ├── LogScreen.kt             # Logs + Terminal + Crash viewer
+│   └── SettingsScreen.kt        # LLM config + updates
 └── util/
     ├── ServiceState.kt          # Reactive state
     ├── PermissionHelper.kt      # Permission management
-    └── NotificationHelper.kt    # Push notifications
+    ├── NotificationHelper.kt    # Push notifications
+    └── AppUpdater.kt            # Auto-update from GitHub
 ```
-
----
-
-## Roadmap
-
-- [x] Native app shell, bridge server, accessibility, notifications
-- [x] Mission Control dashboard with kanban board
-- [x] Room database with vector search memory
-- [x] 28 configurable connectors with token persistence
-- [x] AI chat with 16 slash commands and file attachment
-- [x] 22 LLM tools (device + utility + service)
-- [x] 13 LLM providers with unified API
-- [x] Terminal tab with shell command execution
-- [x] Push notifications on agent response/error
-- [x] File editor with save to disk
-- [x] Service connectors (GitHub, Vercel, Supabase, Google Workspace)
-- [ ] Shizuku integration for ADB-level control
-- [ ] MediaProjection screenshots + vision pipeline
-- [ ] On-device model (Gemma 3n) for offline
-- [ ] Streaming LLM responses
-- [ ] Chat history persistence
 
 ---
 
@@ -255,18 +218,18 @@ app/src/main/kotlin/com/openclaw/android/
 
 | Metric | Value |
 |--------|-------|
-| APK size (debug) | ~26 MB |
-| Kotlin source files | 30 |
-| Lines of code | ~3,500 |
-| LLM tools | 22 (8 device + 9 utility + 5 service) |
+| APK size | ~26 MB |
+| Kotlin files | 40+ |
+| Lines of code | 5,000+ |
+| LLM tools | 31 |
 | LLM providers | 13 |
+| Models | 50+ |
 | Slash commands | 16 |
-| Bridge API endpoints | 16 |
-| Connectors | 28 |
 | Min SDK | 24 (Android 7.0) |
+| Target SDK | 34 (Android 14) |
 
 ---
 
 ## License
 
-Private project. Not for distribution.
+Private project.

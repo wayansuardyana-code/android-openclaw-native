@@ -35,6 +35,7 @@ import com.openclaw.android.ai.AgentConfig
 import com.openclaw.android.ai.AgentLoop
 import com.openclaw.android.ai.LlmClient
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
 import java.io.File
 
 private val BG = Color(0xFF0D1117)
@@ -55,41 +56,51 @@ data class ChatMessage(
     val attachmentName: String? = null
 )
 
-// Persistent chat state — survives tab switches AND app restarts
+// Persistent chat state — Room SQLite DB + in-memory list
 object ChatState {
     val messages = mutableStateListOf<ChatMessage>()
-    private val gson = com.google.gson.Gson()
-    private val type = object : com.google.gson.reflect.TypeToken<List<ChatMessage>>() {}.type
+    private var loaded = false
 
-    private fun chatFile(): File =
-        File(com.openclaw.android.OpenClawApplication.instance.filesDir, "chat_history.json")
+    private fun db() = com.openclaw.android.data.AppDatabase.getInstance(
+        com.openclaw.android.OpenClawApplication.instance
+    ).chatMessageDao()
 
-    fun load() {
+    suspend fun load() {
+        if (loaded && messages.isNotEmpty()) return
         try {
-            val file = chatFile()
-            if (file.exists()) {
-                val saved: List<ChatMessage> = gson.fromJson(file.readText(), type)
-                messages.clear()
-                messages.addAll(saved.takeLast(200)) // keep last 200 messages
-            }
+            val saved = db().getRecent("default", 200).reversed() // oldest first
+            messages.clear()
+            messages.addAll(saved.map { ChatMessage(it.role, it.content, it.timestamp, it.attachmentName) })
+            loaded = true
         } catch (_: Exception) {}
-    }
-
-    fun save() {
-        try {
-            chatFile().writeText(gson.toJson(messages.toList()))
-        } catch (_: Exception) {}
-    }
-
-    fun clear() {
-        messages.clear()
-        save()
-        com.openclaw.android.ai.ConversationManager.clear()
     }
 
     fun addMessage(msg: ChatMessage) {
         messages.add(msg)
-        save() // persist after every message
+        // Save to DB in background
+        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                db().insert(com.openclaw.android.data.entity.ChatMessageEntity(
+                    role = msg.role, content = msg.content, timestamp = msg.timestamp,
+                    attachmentName = msg.attachmentName
+                ))
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun clear() {
+        messages.clear()
+        com.openclaw.android.ai.ConversationManager.clear()
+        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try { db().clearSession("default") } catch (_: Exception) {}
+        }
+    }
+
+    /** Search chat history by keyword */
+    suspend fun search(query: String): List<ChatMessage> {
+        return try {
+            db().search(query, 20).map { ChatMessage(it.role, it.content, it.timestamp, it.attachmentName) }
+        } catch (_: Exception) { emptyList() }
     }
 }
 

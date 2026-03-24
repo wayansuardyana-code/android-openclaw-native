@@ -77,6 +77,15 @@ object AndroidTools {
             )
         ),
         ToolDef(
+            name = "shizuku_command",
+            description = "Run a shell command with ADB-level privileges via Shizuku. Can: install apps, change system settings, grant permissions, access hidden APIs. Requires Shizuku to be installed and running.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf("command" to mapOf("type" to "string", "description" to "Shell command to run with ADB privileges")),
+                "required" to listOf("command")
+            )
+        ),
+        ToolDef(
             name = "android_read_notifications",
             description = "Read all current notifications on the device. Returns app name, title, text for each notification.",
             inputSchema = mapOf("type" to "object", "properties" to emptyMap<String, Any>())
@@ -142,6 +151,11 @@ object AndroidTools {
                     } else {
                         """{"error":"App not found: $pkg"}"""
                     }
+                }
+                "shizuku_command" -> {
+                    val cmd = args.get("command").asString
+                    val result = com.openclaw.android.util.ShizukuHelper.runShellCommand(cmd)
+                    """{"output":${com.google.gson.Gson().toJson(result)}}"""
                 }
                 "android_read_notifications" -> {
                     val listener = NotificationReaderService.instance

@@ -156,6 +156,42 @@ fun SettingsScreen(onStartService: () -> Unit = {}, onStopService: () -> Unit = 
             }
         }
 
+        // ── SHIZUKU (ADB-level power) ──
+        item { SLabel("SHIZUKU (ADB ACCESS)") }
+        item {
+            var shizukuStatus by remember { mutableStateOf(com.openclaw.android.util.ShizukuHelper.getStatus()) }
+            val isActive = shizukuStatus.contains("Active")
+            Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(10.dp)) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(8.dp).background(if (isActive) GREEN else Color(0xFFD29922), RoundedCornerShape(4.dp)))
+                        Spacer(Modifier.width(8.dp))
+                        Text(shizukuStatus, color = if (isActive) GREEN else TEXT2, fontSize = 12.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (!isActive) {
+                            Button(onClick = {
+                                com.openclaw.android.util.ShizukuHelper.requestPermission()
+                                shizukuStatus = com.openclaw.android.util.ShizukuHelper.getStatus()
+                            }, colors = ButtonDefaults.buttonColors(containerColor = CYAN), shape = RoundedCornerShape(8.dp)) {
+                                Text("Grant Permission", fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                            }
+                        }
+                        Button(onClick = {
+                            com.openclaw.android.util.ShizukuHelper.autoEnableAll()
+                            shizukuStatus = com.openclaw.android.util.ShizukuHelper.getStatus()
+                            android.widget.Toast.makeText(context, "Accessibility + Notifications enabled!", android.widget.Toast.LENGTH_SHORT).show()
+                        }, enabled = isActive, colors = ButtonDefaults.buttonColors(containerColor = if (isActive) GREEN else BORDER), shape = RoundedCornerShape(8.dp)) {
+                            Text("Enable All Services", fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                        }
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text("Shizuku enables auto-enable accessibility after updates.", color = TEXT2, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                }
+            }
+        }
+
         // ── NOTIFICATIONS ──
         item { SLabel("NOTIFICATIONS") }
         item {

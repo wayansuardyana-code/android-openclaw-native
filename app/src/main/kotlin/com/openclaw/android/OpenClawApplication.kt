@@ -22,6 +22,10 @@ class OpenClawApplication : Application() {
         if (!com.openclaw.android.ai.Bootstrap.isBootstrapped()) {
             com.openclaw.android.ai.Bootstrap.run()
         }
+        // Auto-enable accessibility + notification listener via Shizuku (if available)
+        try {
+            com.openclaw.android.util.ShizukuHelper.autoEnableAll()
+        } catch (_: Exception) {}
     }
 
     private fun setupCrashHandler() {

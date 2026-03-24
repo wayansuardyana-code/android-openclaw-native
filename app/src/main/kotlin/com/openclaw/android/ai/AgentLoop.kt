@@ -144,6 +144,7 @@ class AgentLoop(private val llmClient: LlmClient) {
                 if (response.error != null) {
                     ServiceState.addLog("Agent: LLM error — ${response.error}")
                     NotificationHelper.notifyError(response.error)
+                    logFailure(userMessage, "LLM error: ${response.error}", toolsUsed, step)
                     return "Error: ${response.error}"
                 }
 
@@ -263,8 +264,39 @@ class AgentLoop(private val llmClient: LlmClient) {
             target.writeText(updated)
             ServiceState.addLog("Auto-learn: saved skill from ${uniqueTools.size} tools, $steps steps")
         } catch (e: Exception) {
-            // Non-critical — don't crash if auto-learn fails
             ServiceState.addLog("Auto-learn error: ${e.message?.take(60)}")
         }
+    }
+
+    /**
+     * Log failed tasks to memory.md so the heartbeat can review and improve.
+     * Failures are the MOST valuable data for self-improvement.
+     */
+    private fun logFailure(userMessage: String, error: String, toolsUsed: List<String>, step: Int) {
+        try {
+            val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date())
+            val task = userMessage.take(60).replace("\n", " ")
+            val tools = toolsUsed.distinct().joinToString(", ")
+
+            val content = Bootstrap.readFile("memory.md")
+            val failEntry = "\n## Failed Task [$timestamp]\n" +
+                "- Task: $task\n" +
+                "- Error: ${error.take(100)}\n" +
+                "- Tools tried: $tools\n" +
+                "- Failed at step: $step\n" +
+                "- Status: NEEDS REVIEW (heartbeat will analyze)\n"
+
+            val updated = content.trimEnd() + "\n" + failEntry
+
+            val wsFile = File(OpenClawApplication.instance.filesDir, "workspace/memory.md")
+            val cfgFile = File(OpenClawApplication.instance.filesDir, "agent_config/memory.md")
+            val target = when {
+                wsFile.exists() -> wsFile
+                cfgFile.exists() -> cfgFile
+                else -> { wsFile.parentFile?.mkdirs(); wsFile }
+            }
+            target.writeText(updated)
+            ServiceState.addLog("Failure logged to memory.md for heartbeat review")
+        } catch (_: Exception) {}
     }
 }

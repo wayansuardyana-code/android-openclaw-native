@@ -34,6 +34,7 @@ class OpenClawService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var bridgeServer: AndroidBridgeServer? = null
     private var telegramBot: TelegramBotService? = null
+    private var heartbeat: HeartbeatService? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -78,9 +79,13 @@ class OpenClawService : Service() {
             }
         }
 
-        // TODO Phase 1b: Start Node.js runtime with OpenClaw gateway
-        // NodeJsRuntime.start(applicationContext, "openclaw/openclaw.mjs", "gateway")
-        ServiceState.addLog("Node.js runtime: not yet integrated (Phase 1b)")
+        // Start Heartbeat (autonomous agent loop)
+        scope.launch {
+            kotlinx.coroutines.delay(5000) // Let everything settle
+            heartbeat = HeartbeatService()
+            heartbeat?.start()
+        }
+
         ServiceState.addLog("Bridge API ready at http://localhost:18790")
 
         // Request battery optimization exemption
@@ -113,6 +118,8 @@ class OpenClawService : Service() {
 
     override fun onDestroy() {
         ServiceState.addLog("Service stopping...")
+        heartbeat?.stop()
+        heartbeat = null
         telegramBot?.stop()
         telegramBot = null
         scope.cancel()

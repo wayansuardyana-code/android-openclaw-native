@@ -53,14 +53,34 @@ class ScreenReaderService : AccessibilityService() {
         val result = JsonObject()
         result.addProperty("pkg", root.packageName?.toString() ?: "?")
         val nodes = JsonArray()
-        traverseCompact(root, 0, nodes, maxNodes = 60, maxDepth = 12)
+        // Get screen dimensions for visibility check
+        val dm = resources.displayMetrics
+        val screenW = dm.widthPixels
+        val screenH = dm.heightPixels
+
+        traverseCompact(root, 0, nodes, maxNodes = 80, maxDepth = 15, screenW, screenH)
         result.add("ui", nodes)
         result.addProperty("count", nodes.size())
+
+        // Add focused element info
+        val focused = findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+        if (focused != null) {
+            val fRect = Rect()
+            focused.getBoundsInScreen(fRect)
+            val fObj = JsonObject()
+            fObj.addProperty("t", focused.text?.toString()?.take(80) ?: "")
+            fObj.addProperty("hint", focused.hintText?.toString()?.take(80) ?: "")
+            fObj.addProperty("x", (fRect.left + fRect.right) / 2)
+            fObj.addProperty("y", (fRect.top + fRect.bottom) / 2)
+            result.add("focused", fObj)
+            focused.recycle()
+        }
+
         root.recycle()
         return result
     }
 
-    private fun traverseCompact(node: AccessibilityNodeInfo, depth: Int, out: JsonArray, maxNodes: Int, maxDepth: Int) {
+    private fun traverseCompact(node: AccessibilityNodeInfo, depth: Int, out: JsonArray, maxNodes: Int, maxDepth: Int, screenW: Int = 1080, screenH: Int = 2400) {
         if (out.size() >= maxNodes || depth > maxDepth) return
 
         val rect = Rect()
@@ -69,21 +89,27 @@ class ScreenReaderService : AccessibilityService() {
         val desc = node.contentDescription?.toString() ?: ""
         val id = node.viewIdResourceName?.substringAfterLast("/") ?: ""
 
-        // Only include nodes that have useful info
         val hasText = text.isNotBlank()
         val hasDesc = desc.isNotBlank()
         val isInteractive = node.isClickable || node.isEditable || node.isScrollable
         val isVisible = rect.width() > 0 && rect.height() > 0
+        // Skip off-screen elements (not visible to user)
+        val isOnScreen = rect.bottom > 0 && rect.top < screenH && rect.right > 0 && rect.left < screenW
 
-        if (isVisible && (hasText || hasDesc || isInteractive)) {
+        if (isVisible && isOnScreen && (hasText || hasDesc || isInteractive)) {
             val obj = JsonObject()
-            if (hasText) obj.addProperty("t", text.take(80))  // truncate long text
-            if (hasDesc) obj.addProperty("d", desc.take(80))
+            if (hasText) obj.addProperty("t", text.take(100))
+            if (hasDesc) obj.addProperty("d", desc.take(100))
             if (id.isNotBlank()) obj.addProperty("id", id)
-            if (node.isClickable) obj.addProperty("c", 1)     // clickable
-            if (node.isEditable) obj.addProperty("e", 1)      // editable
-            if (node.isScrollable) obj.addProperty("s", 1)    // scrollable
-            // Compact bounds: [left, top, right, bottom]
+            if (node.isClickable) obj.addProperty("c", 1)
+            if (node.isEditable) obj.addProperty("e", 1)
+            if (node.isScrollable) obj.addProperty("s", 1)
+            if (node.isChecked) obj.addProperty("chk", 1)
+            if (node.isSelected) obj.addProperty("sel", 1)
+            // Short class type for disambiguation
+            val cls = node.className?.toString()?.substringAfterLast(".") ?: ""
+            if (cls.isNotBlank() && cls != "View" && cls != "ViewGroup") obj.addProperty("cls", cls)
+            // Compact bounds
             val b = JsonArray()
             b.add(rect.left); b.add(rect.top); b.add(rect.right); b.add(rect.bottom)
             obj.add("b", b)
@@ -105,13 +131,14 @@ class ScreenReaderService : AccessibilityService() {
      */
     fun findElement(query: String): JsonArray {
         val root = rootInActiveWindow ?: return JsonArray()
+        val dm = resources.displayMetrics
         val results = JsonArray()
-        searchNode(root, query.lowercase(), results, maxResults = 10)
+        searchNode(root, query.lowercase(), results, maxResults = 10, dm.widthPixels, dm.heightPixels)
         root.recycle()
         return results
     }
 
-    private fun searchNode(node: AccessibilityNodeInfo, query: String, out: JsonArray, maxResults: Int) {
+    private fun searchNode(node: AccessibilityNodeInfo, query: String, out: JsonArray, maxResults: Int, screenW: Int = 1080, screenH: Int = 2400) {
         if (out.size() >= maxResults) return
 
         val text = node.text?.toString() ?: ""
@@ -121,14 +148,21 @@ class ScreenReaderService : AccessibilityService() {
         if (text.lowercase().contains(query) || desc.lowercase().contains(query) || id.lowercase().contains(query)) {
             val rect = Rect()
             node.getBoundsInScreen(rect)
-            val obj = JsonObject()
-            if (text.isNotBlank()) obj.addProperty("t", text.take(100))
-            if (desc.isNotBlank()) obj.addProperty("d", desc.take(100))
-            obj.addProperty("c", if (node.isClickable) 1 else 0)
-            // Tap point: center of bounds
-            obj.addProperty("x", (rect.left + rect.right) / 2)
-            obj.addProperty("y", (rect.top + rect.bottom) / 2)
-            out.add(obj)
+            // Skip off-screen elements
+            if (rect.bottom <= 0 || rect.top >= screenH || rect.right <= 0 || rect.left >= screenW) {
+                // Still search children
+            } else {
+                val obj = JsonObject()
+                if (text.isNotBlank()) obj.addProperty("t", text.take(100))
+                if (desc.isNotBlank()) obj.addProperty("d", desc.take(100))
+                obj.addProperty("c", if (node.isClickable) 1 else 0)
+                if (node.isEditable) obj.addProperty("e", 1)
+                val cls = node.className?.toString()?.substringAfterLast(".") ?: ""
+                if (cls.isNotBlank() && cls != "View") obj.addProperty("cls", cls)
+                obj.addProperty("x", (rect.left + rect.right) / 2)
+                obj.addProperty("y", (rect.top + rect.bottom) / 2)
+                out.add(obj)
+            }
         }
 
         for (i in 0 until node.childCount) {

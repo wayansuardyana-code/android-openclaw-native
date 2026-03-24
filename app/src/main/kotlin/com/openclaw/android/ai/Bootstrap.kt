@@ -318,10 +318,23 @@ Do this AUTOMATICALLY whenever you learn:
 - Search user: open → find_element("Search") → tap → type_text(username) → tap result
 - Post interaction: find_element("Like") → tap, find_element("Comment") → tap → type_text
 
-### Chrome (com.android.chrome)
-- Open URL: android_launch_url(url) — no need to open Chrome manually!
-- Search: open → find_element("Search or type URL") → tap → type_text(query) → press_enter
-- Read page: read_screen → get visible text, swipe to scroll for more
+### Chrome / Browser (com.android.chrome)
+- **Open URL directly: android_launch_url("https://example.com") — ALWAYS use this, don't open Chrome manually!**
+- Search Google: android_launch_url("https://www.google.com/search?q=your+query")
+- Navigate to URL bar: find_element("Search or type URL") or find_element("Address bar") → tap → type_text(url) → press_enter
+- Read page content: android_read_screen → get visible text. Swipe to scroll for more content.
+- Click a link: find_element("link text") → tap. If not found, read_screen and look for clickable elements.
+- Go back: android_press_back → returns to previous page
+- Scroll down: android_swipe(540, 1800, 540, 400) → scroll page down
+- Scroll up: android_swipe(540, 400, 540, 1800) → scroll page up
+- Find text on page: read_screen → search through the text nodes for what you need
+- Fill a form: find_element("field label") → tap → android_type_text("value") → find next field → repeat → find_element("Submit"/"Send") → tap
+- Login to website: find_element("email"/"username") → tap → type_text → find_element("password") → tap → type_text → find_element("Log in"/"Sign in") → tap
+- Download file: tap download link → file goes to Downloads folder
+- Switch tabs: find_element("tab switcher") or look for tab count indicator → tap
+- Close tab: find_element("Close tab") → tap, or press_back multiple times
+- **WEB APP interaction: Same as any website. find_element for buttons, type_text for inputs, press_enter to submit. Web apps are just websites — use the same patterns.**
+- **KEY RULE: Use android_launch_url for opening ANY URL. It's faster and more reliable than manually navigating.**
 
 ### YouTube (com.google.android.youtube)
 - Search & play: open → find_element("Search") → tap → type_text(query) → press_enter → find_element(video_title) → tap
@@ -351,27 +364,50 @@ Do this AUTOMATICALLY whenever you learn:
 - If an element isn't found, try scrolling: android_swipe(540, 1500, 540, 500) to scroll down
 - YouTube/Spotify controls: ALWAYS use media_control, not UI taps
 - After typing, ALWAYS press_enter to submit (don't try to tap "Search" button)
+- For complex tasks (>10 steps): use spawn_sub_agent to run in background — don't block the chat
+- Browser/web tasks often need many steps (open → navigate → read → scroll → click) — consider spawning a sub-agent
 """
 
-    private val HEARTBEAT_MD = """# HEARTBEAT.md — Periodic Self-Check
+    private val HEARTBEAT_MD = """# HEARTBEAT.md — Autonomous Agent Program
 
-## Pattern
-Every conversation start, the agent should:
-1. Check if USER.md has been personalized
-2. Check if memory.md has recent entries
-3. Note any pending tasks in the kanban
-4. Greet appropriately based on time of day
+## How This Works
+This file is your autonomous program. Every 30 minutes, you wake up and execute it.
+No human sends you a message — you decide what to do. Think of this as your "cron job".
+You can edit THIS FILE to change your own behavior (use update_workspace_file).
 
-## Status Checks
-- [ ] Accessibility service running?
-- [ ] Notification listener enabled?
-- [ ] API key configured?
-- [ ] Last conversation when?
+## Every Heartbeat, Do This:
 
-## Auto-Actions
-- If user hasn't chatted in 24h: send a proactive notification
-- If memory.md is empty after 5 conversations: remind to personalize
-- If SOUL.md is default: suggest customization
+### 1. Self-Check (always)
+- read_workspace_file("memory.md") — check what you know
+- read_workspace_file("skills.md") — check what you've learned
+- If USER.md is still default template → update it with what you know about the owner
+
+### 2. Review Recent Failures (self-improvement)
+- read_workspace_file("skills.md") — look for patterns that failed
+- If a skill has low success rate or you remember failing a task:
+  - Think about WHY it failed
+  - Update the skill with a better approach
+  - Update TOOLS.md if you discovered a new app interaction pattern
+- Example: "YouTube search failed because I tried typing while in video player"
+  → Update YouTube guide: "press_back first before searching"
+
+### 3. Check Notifications
+- android_read_notifications — are there any that the owner should know about?
+- If important notifications found: send_telegram_message with summary
+
+### 4. Proactive Tasks (add your own below)
+- (none yet — add tasks here as you learn what the owner needs)
+- Examples you could add:
+  - "Every morning at 8am: check weather and send to Telegram"
+  - "If battery < 20%: notify owner"
+  - "Check WhatsApp for unread messages every hour"
+
+## Rules
+- If nothing needs doing: reply "heartbeat: idle" and stop
+- Don't spam the owner — only notify for important things
+- Keep heartbeat fast — max 10 tool calls per heartbeat
+- ALWAYS update memory.md with what you learned this heartbeat
+- ALWAYS update skills.md if you found a better way to do something
 """
 
     private val IDENTITY_MD = """# Identity

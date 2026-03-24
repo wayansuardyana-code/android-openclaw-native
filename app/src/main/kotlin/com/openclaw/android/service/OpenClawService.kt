@@ -33,6 +33,7 @@ class OpenClawService : Service() {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var wakeLock: PowerManager.WakeLock? = null
     private var bridgeServer: AndroidBridgeServer? = null
+    private var telegramBot: TelegramBotService? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -63,6 +64,18 @@ class OpenClawService : Service() {
             }
         }
 
+        // Start Telegram bot polling (if token is configured)
+        scope.launch {
+            try {
+                kotlinx.coroutines.delay(1000) // Let bridge server initialize first
+                telegramBot?.stop()
+                telegramBot = TelegramBotService()
+                telegramBot?.start()
+            } catch (e: Exception) {
+                ServiceState.addLog("Telegram bot error: ${e.message}")
+            }
+        }
+
         // TODO Phase 1b: Start Node.js runtime with OpenClaw gateway
         // NodeJsRuntime.start(applicationContext, "openclaw/openclaw.mjs", "gateway")
         ServiceState.addLog("Node.js runtime: not yet integrated (Phase 1b)")
@@ -73,6 +86,8 @@ class OpenClawService : Service() {
 
     override fun onDestroy() {
         ServiceState.addLog("Service stopping...")
+        telegramBot?.stop()
+        telegramBot = null
         scope.cancel()
         bridgeServer?.stop()
         releaseWakeLock()

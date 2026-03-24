@@ -215,6 +215,36 @@ class ScreenReaderService : AccessibilityService() {
         return result
     }
 
+    // ── Press Enter / IME Action ────────────────────────
+
+    /**
+     * Press Enter/Search/Go on the soft keyboard.
+     * Tries IME action on focused node first, falls back to KeyEvent ENTER.
+     */
+    fun pressEnter(): Boolean {
+        val focused = findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+        if (focused != null) {
+            // Method 1: ACTION_IME_ENTER (Android 11+)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                if (focused.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)) {
+                    focused.recycle()
+                    return true
+                }
+            }
+            // Method 2: Append \n to current text (triggers submit on many apps)
+            val currentText = focused.text?.toString() ?: ""
+            val args = android.os.Bundle().apply {
+                putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "$currentText\n")
+            }
+            if (focused.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) {
+                focused.recycle()
+                return true
+            }
+            focused.recycle()
+        }
+        return false
+    }
+
     // ── Global Actions ──────────────────────────────────
 
     fun pressBack(): Boolean = performGlobalAction(GLOBAL_ACTION_BACK)

@@ -12,8 +12,8 @@ android {
         applicationId = "com.openclaw.android"
         minSdk = 24
         targetSdk = 34
-        versionCode = 181
-        versionName = "1.8.1"
+        versionCode = 182
+        versionName = "1.8.2"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
     }
 

@@ -89,6 +89,11 @@ object AndroidTools {
             inputSchema = mapOf("type" to "object", "properties" to emptyMap<String, Any>())
         ),
         ToolDef(
+            name = "android_press_enter",
+            description = "Press Enter/Search/Go key on the soft keyboard. Use after typing in a search box to submit the query. Also works as IME action (search, send, go, done).",
+            inputSchema = mapOf("type" to "object", "properties" to emptyMap<String, Any>())
+        ),
+        ToolDef(
             name = "android_open_app",
             description = "Open an app by its package name. Common packages: com.whatsapp, com.instagram.android, com.twitter.android, com.google.android.gm (Gmail), com.android.chrome.",
             inputSchema = mapOf(
@@ -179,6 +184,12 @@ object AndroidTools {
                 }
                 "android_press_home" -> {
                     val success = ScreenReaderService.instance?.pressHome() ?: false
+                    """{"success":$success}"""
+                }
+                "android_press_enter" -> {
+                    val reader = ScreenReaderService.instance
+                        ?: return """{"error":"Accessibility service not enabled"}"""
+                    val success = reader.pressEnter()
                     """{"success":$success}"""
                 }
                 "android_open_app" -> {

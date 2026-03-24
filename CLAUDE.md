@@ -147,8 +147,35 @@ github_api, vercel_api, supabase_query, google_workspace, authenticated_api
 - 22 LLM tools, 13 providers, slash commands, file attach, terminal
 - All core features working — app is usable for daily AI assistance
 
+## Code Audit (v0.8.1) — All 14 issues fixed
+- WakeLock: no timeout, released in onDestroy
+- LlmClient: DisposableEffect cleanup
+- ChatScreen: try/catch prevents UI lockup
+- Shell: 30s timeout + destroyForcibly
+- Bridge API: safe casts, no ClassCastException
+- ServiceState: atomic StateFlow.update()
+- @Volatile on service instances
+- JSON escaping via Gson.toJson()
+- Version consistent: 0.8.0-alpha everywhere
+- Connector tokens persist to AgentConfig
+
+## Vector Memory (built-in SQLite)
+- Room DB has MemoryEntity with embedding field (JSON float array)
+- VectorSearch.kt: cosine similarity search over memory embeddings
+- MemoryDao: CRUD + prune old unused + access counting
+- This is local semantic vector memory — NOT file-based RAG
+- Embeddings can come from any provider (Cohere, OpenAI, etc.) via http_request tool
+
+## Google Workspace Integration
+- GWS CLI (googleworkspace/cli) is a Rust binary, NOT suitable for Android embedding
+- Instead: call Google REST APIs directly with Bearer token auth
+- google_workspace tool supports Drive, Sheets, Docs, Calendar, Gmail
+- Auth: user provides OAuth2 access token (from Google Sign-In or manual)
+- Endpoints: googleapis.com/drive/v3, sheets/v4, gmail/v1, calendar/v3
+
 ## Remaining Nice-to-Have (not blocking)
-- Chat history persistence to Room DB (messages lost on restart)
-- Streaming LLM responses (currently waits for full response)
-- GWS CLI integration (Google Workspace via OAuth)
+- Chat history persistence to Room DB
+- Streaming LLM responses
+- Google Sign-In OAuth flow (currently manual token paste)
 - On-device model (Gemma 3n) — noted, not planned yet
+- MetaClaw self-learning framework — not yet implemented

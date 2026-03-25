@@ -86,6 +86,12 @@ class OpenClawService : Service() {
             heartbeat?.start()
         }
 
+        // Auto-check for updates (silent, once per 6 hours)
+        scope.launch {
+            kotlinx.coroutines.delay(8000) // Let network settle
+            com.openclaw.android.util.AppUpdater.autoCheckOnStart(applicationContext)
+        }
+
         ServiceState.addLog("Bridge API ready at http://localhost:18790")
 
         // Request battery optimization exemption

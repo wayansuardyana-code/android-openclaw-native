@@ -74,11 +74,12 @@ object AppUpdater {
 
             // If no APK in release, construct download URL from VPS
             if (apkUrl.isBlank()) {
-                apkUrl = "http://187.127.104.132:8899/openclaw-android-${tagName}-debug.apk"
+                apkUrl = "http://76.13.194.120:8899/openclaw-android-${tagName}-debug.apk"
             }
 
             val currentVersion = BuildConfig.VERSION_NAME
-            val isNewer = tagName.removePrefix("v") != currentVersion
+            val remoteVersion = tagName.removePrefix("v")
+            val isNewer = compareVersions(remoteVersion, currentVersion) > 0
 
             ServiceState.addLog("Update check: current=$currentVersion, latest=$tagName, newer=$isNewer")
 
@@ -127,6 +128,43 @@ object AppUpdater {
         } else {
             context.registerReceiver(receiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE))
         }
+    }
+
+    /** Compare semver: returns >0 if a is newer, 0 if equal, <0 if older */
+    private fun compareVersions(a: String, b: String): Int {
+        val pa = a.split(".").map { it.toIntOrNull() ?: 0 }
+        val pb = b.split(".").map { it.toIntOrNull() ?: 0 }
+        for (i in 0 until maxOf(pa.size, pb.size)) {
+            val va = pa.getOrElse(i) { 0 }
+            val vb = pb.getOrElse(i) { 0 }
+            if (va != vb) return va - vb
+        }
+        return 0
+    }
+
+    /**
+     * Auto-check on app start. Call from Application.onCreate() or MainActivity.
+     * Silent — only shows notification if update is available.
+     */
+    suspend fun autoCheckOnStart(context: Context) = withContext(Dispatchers.IO) {
+        try {
+            // Don't check more than once per 6 hours
+            val prefs = context.getSharedPreferences("openclaw_updater", Context.MODE_PRIVATE)
+            val lastCheck = prefs.getLong("last_check", 0)
+            val sixHours = 6 * 60 * 60 * 1000L
+            if (System.currentTimeMillis() - lastCheck < sixHours) return@withContext
+
+            prefs.edit().putLong("last_check", System.currentTimeMillis()).apply()
+
+            val update = checkForUpdate() ?: return@withContext
+            if (update.isNewer) {
+                ServiceState.addLog("Update available: ${update.version} (current: ${BuildConfig.VERSION_NAME})")
+                NotificationHelper.notifyAgentResponse(
+                    "Update Available",
+                    "OpenClaw ${update.version} is available. Go to Settings to update."
+                )
+            }
+        } catch (_: Exception) {}
     }
 
     private fun installApk(context: Context, fileName: String) {

@@ -264,16 +264,24 @@ fun SettingsScreen(onStartService: () -> Unit = {}, onStopService: () -> Unit = 
 
                     Spacer(Modifier.height(8.dp))
 
-                    // User Guide button
+                    // User Guide button — copies to cache then opens with browser
                     Button(onClick = {
-                        val intent = Intent(Intent.ACTION_VIEW).apply {
-                            setDataAndType(Uri.parse("file:///android_asset/user_guide.html"), "text/html")
-                            setClassName("com.android.chrome", "com.google.android.apps.chrome.Main")
-                        }
-                        try { context.startActivity(intent) } catch (_: Exception) {
-                            try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("file:///android_asset/user_guide.html"))) } catch (_: Exception) {
-                                Toast.makeText(context, "Open user_guide.html in Files tab", Toast.LENGTH_SHORT).show()
+                        try {
+                            // Copy asset to cache dir (browsers can't read file:///android_asset/)
+                            val cacheFile = java.io.File(context.cacheDir, "user_guide.html")
+                            context.assets.open("user_guide.html").use { input ->
+                                cacheFile.outputStream().use { output -> input.copyTo(output) }
                             }
+                            val uri = androidx.core.content.FileProvider.getUriForFile(
+                                context, "${context.packageName}.provider", cacheFile
+                            )
+                            val intent = Intent(Intent.ACTION_VIEW).apply {
+                                setDataAndType(uri, "text/html")
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            context.startActivity(intent)
+                        } catch (_: Exception) {
+                            Toast.makeText(context, "Min specs: Android 7.0+, 3GB RAM, ARM64. See GitHub for full guide.", Toast.LENGTH_LONG).show()
                         }
                     }, colors = ButtonDefaults.buttonColors(containerColor = GREEN), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Default.Help, null, Modifier.size(16.dp)); Spacer(Modifier.width(4.dp))

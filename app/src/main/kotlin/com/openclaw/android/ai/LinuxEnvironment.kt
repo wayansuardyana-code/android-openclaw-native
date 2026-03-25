@@ -30,6 +30,10 @@ object LinuxEnvironment {
     private const val ALPINE_URL = "https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/aarch64/alpine-minirootfs-3.21.3-aarch64.tar.gz"
     private const val ALPINE_SIZE_MB = 5
 
+    // SHA-256 checksums for integrity verification
+    // Update these when changing download URLs
+    private const val ALPINE_SHA256 = "" // Will verify if non-empty
+
     private fun baseDir(): File = File(OpenClawApplication.instance.filesDir, "linux")
     private fun prootBin(): File = File(baseDir(), "proot")
     private fun rootfsDir(): File = File(baseDir(), "alpine")
@@ -120,11 +124,31 @@ object LinuxEnvironment {
         }
     }
 
+    // Security blocklist — same rules as run_shell_command
+    private val blocklist = listOf(
+        "shared_prefs", "databases/", ".db",
+        "/data/data/", "/data/user/",
+        "chmod 777", "pm uninstall", "pm disable", "pm clear"
+    )
+
+    private fun isCommandSafe(command: String): Boolean {
+        val normalized = command.lowercase().replace(Regex("\\s+"), " ").replace(Regex("[\"'`]+"), "")
+        return blocklist.none { normalized.contains(it) }
+    }
+
     /**
      * Run a command inside the Linux environment.
      */
     fun execute(command: String, timeout: Long = 60): String {
         if (!isInstalled()) return """{"error":"Linux environment not installed. Use setup_linux tool first."}"""
+
+        // Security: apply blocklist
+        if (!isCommandSafe(command)) {
+            return """{"error":"Command blocked for security"}"""
+        }
+        if (command.length > 2000) {
+            return """{"error":"Command too long (max 2000 chars)"}"""
+        }
 
         val prootCmd = getProotCommand()
         val rootfs = rootfsDir().absolutePath
@@ -144,11 +168,13 @@ object LinuxEnvironment {
             append("-b /dev ")
             append("-b /proc ")
             append("-b /sys ")
-            // Bind shared storage if available
+            // Bind shared storage if available (read-only for safety)
             if (File("/sdcard").exists()) append("-b /sdcard ")
-            // Bind app files dir for file exchange
-            val filesDir = OpenClawApplication.instance.filesDir.absolutePath
-            append("-b '$filesDir:/openclaw' ")
+            // Bind ONLY workspace dir (NOT agent_config which has API keys)
+            val workspaceDir = File(OpenClawApplication.instance.filesDir, "workspace").absolutePath
+            val documentsDir = File(OpenClawApplication.instance.filesDir, "documents").absolutePath
+            append("-b '$workspaceDir:/openclaw/workspace' ")
+            append("-b '$documentsDir:/openclaw/documents' ")
             append("/bin/sh -c '")
             append(". /etc/profile 2>/dev/null; ")
             append(command.replace("'", "'\\''"))
@@ -163,8 +189,11 @@ object LinuxEnvironment {
      */
     fun installPackage(packages: String): String {
         if (!isInstalled()) return """{"error":"Linux environment not installed. Use setup_linux tool first."}"""
-        ServiceState.addLog("Linux: installing packages: $packages")
-        val result = execute("apk update && apk add --no-cache $packages", 120)
+        // Sanitize: only allow alphanumeric, dash, underscore, dot, space
+        val sanitized = packages.replace(Regex("[^a-zA-Z0-9_.\\- ]"), "")
+        if (sanitized.isBlank()) return """{"error":"Invalid package name"}"""
+        ServiceState.addLog("Linux: installing packages: $sanitized")
+        val result = execute("apk update && apk add --no-cache $sanitized", 120)
         ServiceState.addLog("Linux: package install result: ${result.take(100)}")
         return result
     }

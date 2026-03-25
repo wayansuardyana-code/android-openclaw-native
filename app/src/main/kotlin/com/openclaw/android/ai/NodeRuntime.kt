@@ -129,19 +129,12 @@ object NodeRuntime {
      */
     fun npmInstall(packages: String): String {
         if (!isInstalled()) return """{"error":"Node.js not installed. Use install_node tool first."}"""
+        // Sanitize package names
+        val sanitized = packages.replace(Regex("[^a-zA-Z0-9@_.\\-/ ]"), "")
+        if (sanitized.isBlank()) return """{"error":"Invalid package name"}"""
         val nodeCmd = getNodeCommand()
         val npmPath = npmBin().absolutePath
-        return runCmd("$nodeCmd '$npmPath' install -g $packages --quiet", 120)
-    }
-
-    /**
-     * Run an npm/npx command.
-     */
-    fun npxRun(command: String, timeout: Long = 60): String {
-        if (!isInstalled()) return """{"error":"Node.js not installed. Use install_node tool first."}"""
-        val nodeCmd = getNodeCommand()
-        val npxPath = npxBin().absolutePath
-        return runCmd("$nodeCmd '$npxPath' $command", timeout)
+        return runCmd("$nodeCmd '$npmPath' install -g $sanitized --quiet", 120)
     }
 
     /**
@@ -149,10 +142,18 @@ object NodeRuntime {
      */
     fun startServer(scriptPath: String, port: Int = 3000): String {
         if (!isInstalled()) return """{"error":"Node.js not installed. Use install_node tool first."}"""
+        // Validate script path is within app files
+        val appDir = OpenClawApplication.instance.filesDir.canonicalPath
+        val sdcardDocs = "/storage/emulated/0/Documents"
+        val canonical = File(scriptPath).canonicalPath
+        if (!canonical.startsWith(appDir) && !canonical.startsWith(sdcardDocs)) {
+            return """{"error":"Script path must be within app files or /sdcard/Documents"}"""
+        }
         val nodeCmd = getNodeCommand()
-        val pid = runCmd("$nodeCmd '$scriptPath' &\necho $!")
+        val escaped = scriptPath.replace("'", "'\\''")
+        val pid = runCmd("$nodeCmd '$escaped' &\necho \$!")
         ServiceState.addLog("Node.js: server started on port $port (PID: ${pid.trim()})")
-        return """{"success":true,"port":$port,"pid":"${pid.trim()}","command":"$nodeCmd '$scriptPath'"}"""
+        return """{"success":true,"port":$port,"pid":"${pid.trim()}"}"""
     }
 
     private fun runCmd(cmd: String, timeoutSecs: Long = 60): String {

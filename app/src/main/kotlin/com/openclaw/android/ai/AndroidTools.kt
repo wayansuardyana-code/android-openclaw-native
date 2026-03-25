@@ -268,6 +268,48 @@ object AndroidTools {
             )
         ),
         ToolDef(
+            name = "look_and_find",
+            description = "YOUR PRIMARY EYES — Take screenshot, ask Gemini Vision to locate a specific element, returns tap coordinates. Use this FIRST instead of read_screen/find_element. Works on ALL apps including Flutter/React Native. Example: look_and_find('search bar') → {x:540, y:190}. Then tap(540, 190).",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "target" to mapOf("type" to "string", "description" to "What to find: 'search bar', 'login button', 'Crypto tab', 'the red X button', etc."),
+                    "context" to mapOf("type" to "string", "description" to "Optional: extra context like 'at the bottom of the screen' or 'in the navigation bar'")
+                ),
+                "required" to listOf("target")
+            )
+        ),
+        ToolDef(
+            name = "look_and_describe",
+            description = "Take screenshot and describe everything visible on screen. Returns full text description with element positions. Use when you need to understand the current screen layout before acting.",
+            inputSchema = mapOf("type" to "object", "properties" to emptyMap<String, Any>())
+        ),
+        ToolDef(
+            name = "scroll_down",
+            description = "Scroll down to see more content below. Equivalent to swiping up on the screen.",
+            inputSchema = mapOf("type" to "object", "properties" to emptyMap<String, Any>())
+        ),
+        ToolDef(
+            name = "scroll_up",
+            description = "Scroll up to see content above. Equivalent to swiping down on the screen.",
+            inputSchema = mapOf("type" to "object", "properties" to emptyMap<String, Any>())
+        ),
+        ToolDef(
+            name = "swipe_left",
+            description = "Swipe left — navigate to next tab, next page, dismiss panel, or next carousel item.",
+            inputSchema = mapOf("type" to "object", "properties" to emptyMap<String, Any>())
+        ),
+        ToolDef(
+            name = "swipe_right",
+            description = "Swipe right — navigate to previous tab, previous page, or open side drawer.",
+            inputSchema = mapOf("type" to "object", "properties" to emptyMap<String, Any>())
+        ),
+        ToolDef(
+            name = "pull_to_refresh",
+            description = "Pull to refresh — swipe down from top of content area to trigger refresh in lists/feeds.",
+            inputSchema = mapOf("type" to "object", "properties" to emptyMap<String, Any>())
+        ),
+        ToolDef(
             name = "explore_app",
             description = "Explore an unfamiliar app to learn its UI layout BEFORE attempting tasks. Opens the app, reads each screen, maps interactive elements and navigation patterns. Saves a knowledge map to notes. Use BEFORE interacting with an app you haven't used before. Returns a JSON map of the app's screens, buttons, navigation, and key elements.",
             inputSchema = mapOf(
@@ -401,6 +443,232 @@ NOTE: This app ($pkg) has NO accessibility elements — it may use Flutter/React
                     val newVol = audioManager.getStreamVolume(stream)
                     """{"success":true,"stream":"$streamName","volume":$newVol,"max":$maxVol}"""
                 }
+                // ── VISION-FIRST TOOLS (the "eyes") ──
+                "look_and_find" -> {
+                    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {
+                        return """{"error":"Requires Android 11+"}"""
+                    }
+                    val reader = ScreenReaderService.instance
+                        ?: return """{"error":"Accessibility service not enabled"}"""
+                    val target = args.get("target")?.asString ?: return """{"error":"Missing 'target' parameter"}"""
+                    val extraContext = args.get("context")?.asString ?: ""
+
+                    // Take screenshot
+                    val context = com.openclaw.android.OpenClawApplication.instance
+                    val dir = java.io.File(context.filesDir, "screenshots")
+                    dir.mkdirs()
+                    val file = java.io.File(dir, "look_${System.currentTimeMillis()}.png")
+                    reader.captureScreenshot(file.absolutePath)
+                    if (!file.exists() || file.length() == 0L) return """{"error":"Screenshot failed"}"""
+
+                    val geminiKey = AgentConfig.getKeyForProvider("gemini").ifBlank { AgentConfig.getKeyForProvider("google") }
+                    if (geminiKey.isBlank()) {
+                        // Fallback: try accessibility tree
+                        val elements = reader.findElement(target)
+                        if (elements.size() > 0) {
+                            val first = elements.get(0).asJsonObject
+                            val x = first.get("x")?.asInt ?: 540
+                            val y = first.get("y")?.asInt ?: 960
+                            return """{"found":true,"method":"accessibility","target":${gson.toJson(target)},"x":$x,"y":$y,"hint":"No Gemini key — used accessibility tree fallback"}"""
+                        }
+                        return """{"found":false,"error":"No Gemini API key and element not found in accessibility tree. Add Gemini key in Settings for vision-based search."}"""
+                    }
+
+                    // Send to Gemini Vision with coordinate extraction prompt
+                    val imageBytes = file.readBytes()
+                    val base64Image = android.util.Base64.encodeToString(imageBytes, android.util.Base64.NO_WRAP)
+
+                    val prompt = """You are a screen coordinate finder for an Android phone (1080x2400 resolution).
+Look at this screenshot and find: "$target"${if (extraContext.isNotBlank()) " ($extraContext)" else ""}
+
+RESPOND WITH ONLY THIS JSON FORMAT (no other text):
+{"found":true,"x":540,"y":190,"description":"search bar at top center"}
+
+If not found:
+{"found":false,"description":"what you see instead"}
+
+Rules:
+- x is horizontal (0=left, 1080=right)
+- y is vertical (0=top, 2400=bottom)
+- Return the CENTER point of the element
+- Be precise — coordinates must be tappable"""
+
+                    val requestBody = com.google.gson.JsonObject().apply {
+                        val contents = com.google.gson.JsonArray()
+                        contents.add(com.google.gson.JsonObject().apply {
+                            val parts = com.google.gson.JsonArray()
+                            parts.add(com.google.gson.JsonObject().apply { addProperty("text", prompt) })
+                            parts.add(com.google.gson.JsonObject().apply {
+                                add("inline_data", com.google.gson.JsonObject().apply {
+                                    addProperty("mime_type", "image/png")
+                                    addProperty("data", base64Image)
+                                })
+                            })
+                            add("parts", parts)
+                        })
+                        add("contents", contents)
+                        add("generationConfig", com.google.gson.JsonObject().apply {
+                            addProperty("temperature", 0.1)
+                            addProperty("maxOutputTokens", 200)
+                        })
+                    }
+
+                    try {
+                        val client = io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
+                            engine { config { readTimeout(15, java.util.concurrent.TimeUnit.SECONDS) } }
+                        }
+                        val resp = client.post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$geminiKey") {
+                            contentType(ContentType.Application.Json)
+                            setBody(requestBody.toString())
+                        }
+                        client.close()
+                        val respText = resp.bodyAsText()
+
+                        val respJson = try { com.google.gson.JsonParser.parseString(respText).asJsonObject } catch (_: Exception) {
+                            return """{"found":false,"error":"Vision API returned invalid response"}"""
+                        }
+                        if (respJson.has("error")) {
+                            val errMsg = respJson.getAsJsonObject("error")?.get("message")?.asString ?: "Unknown"
+                            return """{"found":false,"error":"Gemini: ${errMsg.take(150).replace("\"", "'")}"}"""
+                        }
+
+                        val text = respJson.getAsJsonArray("candidates")
+                            ?.get(0)?.asJsonObject?.getAsJsonObject("content")
+                            ?.getAsJsonArray("parts")?.get(0)?.asJsonObject
+                            ?.get("text")?.asString ?: ""
+
+                        ServiceState.addLog("look_and_find: target='$target' → $text")
+
+                        // Parse JSON from Gemini's response
+                        val jsonMatch = Regex("\\{[^}]+\\}").find(text)
+                        if (jsonMatch != null) {
+                            try {
+                                val result = com.google.gson.JsonParser.parseString(jsonMatch.value).asJsonObject
+                                result.addProperty("method", "vision")
+                                result.addProperty("target", target)
+                                return result.toString()
+                            } catch (_: Exception) {}
+                        }
+                        """{"found":false,"raw_response":${gson.toJson(text.take(300))},"error":"Could not parse coordinates from vision response"}"""
+                    } catch (e: Exception) {
+                        ServiceState.addLog("look_and_find error: ${e.message?.take(80)}")
+                        """{"found":false,"error":"Vision API failed: ${e.message?.take(100)?.replace("\"", "'")}"}"""
+                    }
+                }
+
+                "look_and_describe" -> {
+                    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {
+                        return """{"error":"Requires Android 11+"}"""
+                    }
+                    val reader = ScreenReaderService.instance
+                        ?: return """{"error":"Accessibility service not enabled"}"""
+                    val context = com.openclaw.android.OpenClawApplication.instance
+                    val dir = java.io.File(context.filesDir, "screenshots")
+                    dir.mkdirs()
+                    val file = java.io.File(dir, "describe_${System.currentTimeMillis()}.png")
+                    reader.captureScreenshot(file.absolutePath)
+                    if (!file.exists() || file.length() == 0L) return """{"error":"Screenshot failed"}"""
+
+                    val geminiKey = AgentConfig.getKeyForProvider("gemini").ifBlank { AgentConfig.getKeyForProvider("google") }
+                    if (geminiKey.isBlank()) {
+                        val tree = reader.readScreen().toString().take(3000)
+                        return """{"method":"accessibility","note":"No Gemini key — showing accessibility tree instead","screen":$tree}"""
+                    }
+
+                    val imageBytes = file.readBytes()
+                    val base64Image = android.util.Base64.encodeToString(imageBytes, android.util.Base64.NO_WRAP)
+
+                    val prompt = """Describe this Android screen in detail for a blind AI agent that needs to interact with it.
+For EACH interactive element (buttons, tabs, inputs, links, icons), provide:
+- What it is (button, tab, input field, icon, text link)
+- Its label/text
+- Approximate position as tap coordinates (x, y) where screen is 1080x2400
+- Whether it looks tappable
+
+Format as a structured list. Be precise with coordinates — they will be used for tapping."""
+
+                    val requestBody = com.google.gson.JsonObject().apply {
+                        val contents = com.google.gson.JsonArray()
+                        contents.add(com.google.gson.JsonObject().apply {
+                            val parts = com.google.gson.JsonArray()
+                            parts.add(com.google.gson.JsonObject().apply { addProperty("text", prompt) })
+                            parts.add(com.google.gson.JsonObject().apply {
+                                add("inline_data", com.google.gson.JsonObject().apply {
+                                    addProperty("mime_type", "image/png")
+                                    addProperty("data", base64Image)
+                                })
+                            })
+                            add("parts", parts)
+                        })
+                        add("contents", contents)
+                    }
+
+                    try {
+                        val client = io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
+                            engine { config { readTimeout(30, java.util.concurrent.TimeUnit.SECONDS) } }
+                        }
+                        val resp = client.post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$geminiKey") {
+                            contentType(ContentType.Application.Json)
+                            setBody(requestBody.toString())
+                        }
+                        client.close()
+                        val respText = resp.bodyAsText()
+                        val respJson = try { com.google.gson.JsonParser.parseString(respText).asJsonObject } catch (_: Exception) {
+                            return """{"error":"Vision API returned invalid response: ${respText.take(100).replace("\"", "'")}"}"""
+                        }
+                        if (respJson.has("error")) {
+                            val errMsg = respJson.getAsJsonObject("error")?.get("message")?.asString ?: "Unknown"
+                            return """{"error":"Gemini: ${errMsg.take(200).replace("\"", "'")}"}"""
+                        }
+                        val text = respJson.getAsJsonArray("candidates")
+                            ?.get(0)?.asJsonObject?.getAsJsonObject("content")
+                            ?.getAsJsonArray("parts")?.get(0)?.asJsonObject
+                            ?.get("text")?.asString ?: "No description returned"
+
+                        ServiceState.addLog("look_and_describe: ${text.length} chars")
+                        """{"method":"vision","description":${gson.toJson(text)},"screenshot":"${file.absolutePath}"}"""
+                    } catch (e: Exception) {
+                        """{"error":"Vision failed: ${e.message?.take(100)?.replace("\"", "'")}"}"""
+                    }
+                }
+
+                // ── CONVENIENCE GESTURES ──
+                "scroll_down" -> {
+                    val reader = ScreenReaderService.instance ?: return """{"error":"Accessibility service not enabled"}"""
+                    val success = suspendCancellableCoroutine<Boolean> { cont ->
+                        reader.swipe(540f, 1600f, 540f, 600f, 300) { result -> cont.resume(result) }
+                    }
+                    """{"success":$success,"gesture":"scroll_down"}"""
+                }
+                "scroll_up" -> {
+                    val reader = ScreenReaderService.instance ?: return """{"error":"Accessibility service not enabled"}"""
+                    val success = suspendCancellableCoroutine<Boolean> { cont ->
+                        reader.swipe(540f, 600f, 540f, 1600f, 300) { result -> cont.resume(result) }
+                    }
+                    """{"success":$success,"gesture":"scroll_up"}"""
+                }
+                "swipe_left" -> {
+                    val reader = ScreenReaderService.instance ?: return """{"error":"Accessibility service not enabled"}"""
+                    val success = suspendCancellableCoroutine<Boolean> { cont ->
+                        reader.swipe(900f, 1200f, 180f, 1200f, 250) { result -> cont.resume(result) }
+                    }
+                    """{"success":$success,"gesture":"swipe_left"}"""
+                }
+                "swipe_right" -> {
+                    val reader = ScreenReaderService.instance ?: return """{"error":"Accessibility service not enabled"}"""
+                    val success = suspendCancellableCoroutine<Boolean> { cont ->
+                        reader.swipe(180f, 1200f, 900f, 1200f, 250) { result -> cont.resume(result) }
+                    }
+                    """{"success":$success,"gesture":"swipe_right"}"""
+                }
+                "pull_to_refresh" -> {
+                    val reader = ScreenReaderService.instance ?: return """{"error":"Accessibility service not enabled"}"""
+                    val success = suspendCancellableCoroutine<Boolean> { cont ->
+                        reader.swipe(540f, 400f, 540f, 1400f, 400) { result -> cont.resume(result) }
+                    }
+                    """{"success":$success,"gesture":"pull_to_refresh"}"""
+                }
+
                 "android_open_app" -> {
                     val pkg = args.get("packageName").asString
                     val context = com.openclaw.android.OpenClawApplication.instance

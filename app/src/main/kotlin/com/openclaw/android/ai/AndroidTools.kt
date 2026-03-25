@@ -499,10 +499,13 @@ object AndroidTools {
                     val service = ScreenReaderService.instance
                         ?: return """{"error":"Accessibility service not running"}"""
 
-                    // Step 1: Take screenshot to temp file
+                    // Step 0: Clean up old SoM screenshots
                     val context = com.openclaw.android.OpenClawApplication.instance
                     val dir = File(context.filesDir, "screenshots")
                     dir.mkdirs()
+                    dir.listFiles()?.filter { it.name.startsWith("som_") }?.forEach { it.delete() }
+
+                    // Step 1: Take screenshot to temp file
                     val tempFile = File(dir, "som_temp_${System.currentTimeMillis()}.png")
                     val ssResult = service.captureScreenshot(tempFile.absolutePath)
 

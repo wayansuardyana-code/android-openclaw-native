@@ -27,7 +27,7 @@ Nate: Saves to schedule → HeartbeatService runs at 8am → weather API → Tel
 
 ## Features
 
-### 52 LLM Tools
+### 56 LLM Tools
 | Category | Count | Examples |
 |----------|-------|---------|
 | Android Device | 18 | tap, swipe, type, read screen, screenshot, volume, brightness, clipboard, wifi |
@@ -182,7 +182,7 @@ Requires: JDK 17, Android SDK 34, Kotlin 1.9.22
 
 ## Current Version
 
-**v2.3.0** — 52 tools, 15 providers, auto-memory, tiered recall, LLM fallback, vision, autonomous heartbeat
+**v2.4.1** — 56 tools, 15 providers, SoM vision, scheduled tasks, security hardened, auto-memory, Discord/Slack
 
 ---
 

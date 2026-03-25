@@ -1,6 +1,6 @@
 # OpenClaw Android Native — PLAN.md
 
-> **Version:** 2.3.0
+> **Version:** 2.4.1
 > **Device:** ADVAN X1 (Android 14, API 34)
 > **Owner:** Wayan
 > **Updated:** 2026-03-25
@@ -8,10 +8,10 @@
 
 ---
 
-## Current State (v2.0.0)
+## Current State (v2.4.1)
 
 ### What's Done
-- 45 LLM tools (18 Android + 17 utility + 7 service + 3 Python)
+- 56 LLM tools (20 Android + 24 utility + 7 service + 3 Python + 2 vision/doc)
 - Kotlin + Jetpack Compose native app
 - AccessibilityService (screen control, tap, swipe, type, long press, scroll)
 - NotificationListenerService
@@ -26,7 +26,23 @@
 - App interaction guides (WhatsApp, Instagram, Chrome, YouTube, Gmail, Settings)
 - MiniMax XML cleanup for stable tool parsing
 - Lenient JSON + truncated JSON recovery
-- 13 LLM providers, workspace files, skills system
+- 15 LLM providers, workspace files, skills system
+- Auto-memory SQLite (conversation + tool results auto-saved)
+- TieredMemoryLoader (L0/L1/L2 per-message recall)
+- LLM fallback (auto-tries other providers on failure)
+- Gemini Vision connector (analyze_screenshot)
+- Live narration + mid-task feedback
+- Auto-nudge tool calling (3-layer defense)
+- Auto-updater (GitHub Releases + install prompt)
+- Telegram group support (mention-only in groups)
+- Security hardened: SSRF protection, shell blocklist, file sandbox, TLS validation
+- SoM vision overlay (numbered labels on screenshot + tap by number)
+- Discord/Slack messaging tools (webhook + bot)
+- Scheduled tasks (Room DB backed + HeartbeatService execution)
+- Proactive heartbeat (anti-spam, overnight skip, silent self-improvement)
+- Dashboard 2 tabs (Overview + Task Board) + Sync Context button
+- Shopee/ShopeeFood interaction guide with purchase guardrails
+- Telegram output formatting rules
 
 ### What's NOT Done Yet
 Listed below as upcoming phases.
@@ -72,8 +88,8 @@ Listed below as upcoming phases.
 - Firecrawl — web scraping as a service, structured data ✅ DONE v2.3.0
 
 ### 8.5.2 Communication Gateways
-- Discord Bot — bot token auth (no OAuth needed)
-- Slack Bot — xoxb- token auth
+- Discord Bot — bot token auth ✅ DONE v2.4.0 (send_discord_message, webhook + bot)
+- Slack Bot — xoxb- token auth ✅ DONE v2.4.0 (send_slack_message, webhook + bot)
 - WhatsApp (future) — needs Baileys or WhatsApp Cloud API
 - Email (SMTP) — send emails via configured SMTP server
 
@@ -108,18 +124,13 @@ Listed below as upcoming phases.
 | IPADS-SAI/MobiAgent | 1.8k | Action planning |
 | HKUDS/OpenPhone | 749 | Mobile agentic foundation models |
 
-### 9.1 Screenshot + Vision Model (HIGH PRIORITY)
-- Current: agent reads accessibility tree (text only, misses visual context)
-- Needed: send screenshot to multimodal LLM (GPT-4V, Gemini Vision, etc.)
-- Flow: take_screenshot → encode base64 → send to vision model → get description
-- Benefits: sees images, icons, colors, layout — not just text nodes
-- Implementation: new tool `analyze_screenshot` or enhance `read_screen` with vision option
+### 9.1 Screenshot + Vision Model ✅ DONE v2.2.0
+- analyze_screenshot: screenshot → base64 → Gemini Vision API → text description
 
-### 9.2 Set-of-Mark (SoM) Overlay
-- Technique from MobileAgent: overlay numbered labels on screenshot
-- Agent says "tap #7" instead of guessing coordinates
-- More precise than accessibility tree bounds
-- Implementation: Kotlin draws numbered circles on screenshot before sending to VLM
+### 9.2 Set-of-Mark (SoM) Overlay ✅ DONE v2.4.0
+- analyze_screen_with_som: numbered labels drawn on screenshot at each interactive element
+- tap_som_element: tap element by SoM number (e.g., tap #3)
+- Max 30 elements, off-screen filtered, red circles with white numbers
 
 ### 9.3 Explore-Then-Act (from AppAgent)
 - Before doing a task in unfamiliar app: explore first
@@ -143,11 +154,10 @@ Listed below as upcoming phases.
 - Delivery notification → track package
 - Implementation: NotificationReaderService pushes events to agent pipeline
 
-### 10.2 Time-Based Scheduled Tasks
-- User says: "every morning at 8, check weather and send to Telegram"
-- Store schedule in Room DB
-- HeartbeatService checks schedule on each tick
-- Cron-like expressions or natural language ("every weekday at 9am")
+### 10.2 Time-Based Scheduled Tasks ✅ DONE v2.4.0
+- schedule_task / list_scheduled_tasks / cancel_scheduled_task tools
+- ScheduledTaskEntity in Room DB (max 20 tasks)
+- HeartbeatService executes due tasks every 30 min with optimistic locking
 
 ### 10.3 Battery/WiFi/Location Triggers
 - Battery < 20% → notify owner

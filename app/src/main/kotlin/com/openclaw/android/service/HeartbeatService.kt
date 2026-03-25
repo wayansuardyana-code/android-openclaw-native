@@ -168,6 +168,14 @@ class HeartbeatService {
 
             ServiceState.addLog("Heartbeat: ${dueTasks.size} scheduled task(s) due")
             for (task in dueTasks) {
+                // Update nextRunAt BEFORE execution (optimistic) to prevent
+                // re-execution if the task takes longer than the heartbeat interval
+                val nextRun = System.currentTimeMillis() + (task.intervalMinutes * 60 * 1000L)
+                db.scheduledTaskDao().update(task.copy(
+                    nextRunAt = nextRun,
+                    runCount = task.runCount + 1
+                ))
+
                 ServiceState.addLog("Heartbeat: executing task #${task.id}: ${task.prompt.take(40)}")
                 try {
                     val taskPrompt = "You are executing a scheduled task. Do this and send results to ${task.gateway}. Be concise.\n\nTask: ${task.prompt}"
@@ -176,8 +184,7 @@ class HeartbeatService {
                 } catch (e: Exception) {
                     ServiceState.addLog("Heartbeat: task #${task.id} failed: ${e.message?.take(60)}")
                 }
-                // Update: increment runCount, set nextRunAt
-                val nextRun = System.currentTimeMillis() + (task.intervalMinutes * 60 * 1000L)
+                // Update lastRunAt after execution completes
                 db.scheduledTaskDao().update(task.copy(
                     lastRunAt = System.currentTimeMillis(),
                     nextRunAt = nextRun,

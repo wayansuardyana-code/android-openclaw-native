@@ -578,6 +578,10 @@ object UtilityTools {
 
                     try {
                         if (!webhookUrl.isNullOrBlank()) {
+                            // Validate webhook URL to prevent SSRF
+                            if (!webhookUrl.startsWith("https://discord.com/") && !webhookUrl.startsWith("https://discordapp.com/")) {
+                                return@withContext """{"error":"Invalid Discord webhook URL. Must start with https://discord.com/ or https://discordapp.com/"}"""
+                            }
                             // Webhook mode — simple POST
                             val body = JsonObject().apply { addProperty("content", text) }
                             val resp = sharedHttpClient.post(webhookUrl) {
@@ -611,6 +615,10 @@ object UtilityTools {
 
                     try {
                         if (!webhookUrl.isNullOrBlank()) {
+                            // Validate webhook URL to prevent SSRF
+                            if (!webhookUrl.startsWith("https://hooks.slack.com/")) {
+                                return@withContext """{"error":"Invalid Slack webhook URL. Must start with https://hooks.slack.com/"}"""
+                            }
                             // Webhook mode
                             val body = JsonObject().apply { addProperty("text", text) }
                             val resp = sharedHttpClient.post(webhookUrl) {
@@ -647,6 +655,11 @@ object UtilityTools {
                     val gateway = args.get("gateway")?.asString ?: "telegram"
 
                     val db = com.openclaw.android.data.AppDatabase.getInstance(OpenClawApplication.instance)
+
+                    // Enforce max 20 scheduled tasks
+                    if (db.scheduledTaskDao().getAll().size >= 20) {
+                        return@withContext """{"error":"Maximum 20 scheduled tasks reached. Cancel existing tasks before adding new ones."}"""
+                    }
 
                     // Calculate next run time
                     val now = System.currentTimeMillis()

@@ -72,9 +72,11 @@ object AppUpdater {
                 }
             }
 
-            // If no APK in release, construct download URL from VPS
+            // If no APK in release, use VPS as last resort (HTTPS not available on VPS)
+            // Prefer GitHub release URL (already HTTPS) — VPS only if no asset found
             if (apkUrl.isBlank()) {
-                apkUrl = "http://76.13.194.120:8899/openclaw-android-${tagName}-debug.apk"
+                // Try GitHub release tarball redirect as fallback before raw VPS
+                apkUrl = "https://github.com/$REPO/releases/download/$tagName/openclaw-android-${tagName}-debug.apk"
             }
 
             val currentVersion = BuildConfig.VERSION_NAME

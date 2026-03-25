@@ -155,7 +155,16 @@ This pattern ensures tasks are verifiable, results are communicated, and knowled
 - Shizuku integration declared but not yet connected
 - nodejs-mobile integration optional — Kotlin-native AI agent works standalone
 - APK served via `python3 -m http.server 8899` on VPS for download
-- v2.3.0 is latest build
+- v2.4.1 is latest build
+- v2.4.1: Security audit fixes — HTTPS-only APK downloads, webhook URL validation, scheduled task cap (20), SoM file cleanup, optimistic scheduled task locking
+- v2.4.0: Security hardened — removed trustAllSsl, SSRF protection, shell blocklist, file path sandbox
+- v2.4.0: SoM vision overlay (analyze_screen_with_som + tap_som_element)
+- v2.4.0: Discord/Slack messaging tools (webhook + bot token)
+- v2.4.0: Scheduled tasks (schedule_task, list, cancel) + HeartbeatService execution
+- v2.4.0: Proactive heartbeat with anti-spam, overnight skip
+- v2.4.0: Dashboard 2 tabs (Overview + Task Board) + Sync Context button
+- v2.4.0: Shopee/ShopeeFood interaction guide with purchase guardrails
+- v2.4.0: Telegram output formatting rules (clean tables, no raw dumps)
 - v2.3.0: Auto-memory system — agent auto-saves to SQLite without being told
 - v2.3.0: TieredMemoryLoader (L0/L1/L2) — loads relevant memories into system prompt per-message
 - v2.3.0: brave_search, exa_search, firecrawl_scrape tools (52 total tools)

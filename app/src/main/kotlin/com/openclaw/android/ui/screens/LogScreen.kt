@@ -86,6 +86,25 @@ fun LogsTab() {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text("Logs", color = TEXT, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
             Row {
+                // Export logs to file
+                IconButton(onClick = {
+                    try {
+                        val ctx = com.openclaw.android.OpenClawApplication.instance
+                        val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+                        val docsDir = java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS), "OpenClaw")
+                        docsDir.mkdirs()
+                        val file = java.io.File(docsDir, "logs_$timestamp.txt")
+                        file.writeText(logs.joinToString("\n"))
+                        clipboard.setText(AnnotatedString(file.absolutePath))
+                        android.widget.Toast.makeText(ctx, "Exported: ${file.name}", android.widget.Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        // Fallback: copy all to clipboard
+                        clipboard.setText(AnnotatedString(logs.joinToString("\n")))
+                        android.widget.Toast.makeText(com.openclaw.android.OpenClawApplication.instance, "Copied to clipboard (export failed)", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }) {
+                    Icon(Icons.Default.Share, "Export", tint = TEXT2, modifier = Modifier.size(20.dp))
+                }
                 IconButton(onClick = { clipboard.setText(AnnotatedString(logs.joinToString("\n"))) }) {
                     Icon(Icons.Default.ContentCopy, "Copy all", tint = TEXT2, modifier = Modifier.size(20.dp))
                 }

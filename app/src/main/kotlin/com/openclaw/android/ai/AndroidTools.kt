@@ -515,7 +515,7 @@ Rules:
                         add("contents", contents)
                         add("generationConfig", com.google.gson.JsonObject().apply {
                             addProperty("temperature", 0.1)
-                            addProperty("maxOutputTokens", 500)
+                            addProperty("maxOutputTokens", 1024)
                             addProperty("responseMimeType", "application/json")
                         })
                     }
@@ -543,18 +543,45 @@ Rules:
                             ?.getAsJsonArray("parts")?.get(0)?.asJsonObject
                             ?.get("text")?.asString ?: ""
 
-                        ServiceState.addLog("look_and_find: target='$target' → $text")
+                        ServiceState.addLog("look_and_find: target='$target' → ${text.take(200)}")
 
-                        // Parse JSON from Gemini's response (greedy regex handles nested objects)
+                        // Strategy 1: Try full JSON parse
                         val jsonMatch = Regex("\\{.*\\}", RegexOption.DOT_MATCHES_ALL).find(text)
                         if (jsonMatch != null) {
                             try {
                                 val result = com.google.gson.JsonParser.parseString(jsonMatch.value).asJsonObject
-                                result.addProperty("method", "vision")
-                                result.addProperty("target", target)
-                                return result.toString()
+                                if (result.has("x") && result.has("y")) {
+                                    result.addProperty("method", "vision")
+                                    result.addProperty("target", target)
+                                    return result.toString()
+                                }
                             } catch (_: Exception) {}
                         }
+
+                        // Strategy 2: Extract x,y from partial/truncated JSON using regex
+                        val xMatch = Regex("\"x\"\\s*:\\s*(\\d+)").find(text)
+                        val yMatch = Regex("\"y\"\\s*:\\s*(\\d+)").find(text)
+                        if (xMatch != null && yMatch != null) {
+                            val x = xMatch.groupValues[1].toInt()
+                            val y = yMatch.groupValues[1].toInt()
+                            val desc = Regex("\"description\"\\s*:\\s*\"([^\"]+)\"").find(text)?.groupValues?.get(1) ?: ""
+                            ServiceState.addLog("look_and_find: extracted from partial JSON → x=$x, y=$y")
+                            return """{"found":true,"x":$x,"y":$y,"description":${gson.toJson(desc)},"method":"vision","target":${gson.toJson(target)}}"""
+                        }
+
+                        // Strategy 3: Extract just x (y might be truncated)
+                        if (xMatch != null) {
+                            val x = xMatch.groupValues[1].toInt()
+                            ServiceState.addLog("look_and_find: only x found ($x), y missing — retrying recommended")
+                            return """{"found":true,"x":$x,"y":${screenH / 2},"warning":"y coordinate estimated (response truncated)","method":"vision","target":${gson.toJson(target)}}"""
+                        }
+
+                        // Strategy 4: Check if Gemini said "not found"
+                        if (text.contains("not found", ignoreCase = true) || text.contains("\"found\":false") || text.contains("\"found\": false")) {
+                            val desc = Regex("\"description\"\\s*:\\s*\"([^\"]+)\"").find(text)?.groupValues?.get(1) ?: text.take(200)
+                            return """{"found":false,"description":${gson.toJson(desc)},"method":"vision","target":${gson.toJson(target)}}"""
+                        }
+
                         """{"found":false,"raw_response":${gson.toJson(text.take(300))},"error":"Could not parse coordinates from vision response"}"""
                     } catch (e: Exception) {
                         ServiceState.addLog("look_and_find error: ${e.message?.take(80)}")
@@ -615,7 +642,7 @@ Format as a structured list. Be precise with coordinates — they will be used f
                     }
 
                     val client = io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
-                        engine { config { readTimeout(30, java.util.concurrent.TimeUnit.SECONDS) } }
+                        engine { config { readTimeout(60, java.util.concurrent.TimeUnit.SECONDS) } }
                     }
                     try {
                         val resp = client.post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$geminiKey") {
@@ -804,7 +831,7 @@ Format as a structured list. Be precise with coordinates — they will be used f
                     }
 
                     val visionClient = io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
-                        engine { config { readTimeout(30, java.util.concurrent.TimeUnit.SECONDS) } }
+                        engine { config { readTimeout(60, java.util.concurrent.TimeUnit.SECONDS) } }
                     }
                     try {
                         val resp = visionClient.post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$geminiKey") {

@@ -39,14 +39,10 @@ object ModelRegistry {
         ModelInfo("MiniMax-M2.1", "MiniMax M2.1", "minimax"),
 
         // ── Google / Gemini ──
-        ModelInfo("gemini-2.5-pro-preview-06-05", "Gemini 2.5 Pro (latest)", "google"),
-        ModelInfo("gemini-2.5-flash-preview-05-20", "Gemini 2.5 Flash (latest)", "google"),
         ModelInfo("gemini-2.5-pro", "Gemini 2.5 Pro", "google"),
         ModelInfo("gemini-2.5-flash", "Gemini 2.5 Flash", "google"),
         ModelInfo("gemini-2.0-flash", "Gemini 2.0 Flash", "google"),
         // Alias — same models under "gemini" provider name
-        ModelInfo("gemini-2.5-pro-preview-06-05", "Gemini 2.5 Pro (latest)", "gemini"),
-        ModelInfo("gemini-2.5-flash-preview-05-20", "Gemini 2.5 Flash (latest)", "gemini"),
         ModelInfo("gemini-2.5-pro", "Gemini 2.5 Pro", "gemini"),
         ModelInfo("gemini-2.5-flash", "Gemini 2.5 Flash", "gemini"),
         ModelInfo("gemini-2.0-flash", "Gemini 2.0 Flash", "gemini"),

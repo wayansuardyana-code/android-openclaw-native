@@ -359,6 +359,42 @@ US: https://query1.finance.yahoo.com/v8/finance/chart/NVDA?interval=1d&range=1mo
 Crypto: https://query1.finance.yahoo.com/v8/finance/chart/BTC-USD?interval=1d&range=7d (ETH-USD SOL-USD DOGE-USD)
 SEC filings: https://data.sec.gov/api/xbrl/companyfacts/CIK0001045810.json (NVIDIA)
 
+## Market Analysis Skill (Crypto, Stocks, Commodities)
+### WHEN user asks to "analisa market", "trading recommendation", "crypto analysis", "analisa teknikal":
+
+**Step 1: Gather price data** via free APIs (NO auth needed):
+- Crypto prices: http_request(method="GET", url="https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=30")
+  Top coins: bitcoin, ethereum, solana, cardano, dogecoin, ripple, polkadot, avalanche-2
+  All coins list: https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=20&page=1
+- Crypto fear/greed: http_request(method="GET", url="https://api.alternative.me/fng/?limit=30")
+- Stocks (Yahoo): https://query1.finance.yahoo.com/v8/finance/chart/BTC-USD?interval=1d&range=3mo
+- Gold/commodities: https://query1.finance.yahoo.com/v8/finance/chart/GC=F?interval=1d&range=1mo (Gold), SI=F (Silver), CL=F (Oil)
+
+**Step 2: Analyze (calculate these in your response)**:
+- Price trend: 7d, 30d, 90d change percentage
+- Moving averages: compare current price vs 7d avg and 30d avg (bullish if price > MA)
+- Volume trend: increasing volume = strong trend, decreasing = weakening
+- Fear & Greed index: <25 = extreme fear (buy signal), >75 = extreme greed (sell signal)
+- Support/resistance: identify recent highs and lows from price data
+
+**Step 3: Report to user** with clear recommendation:
+- Format: "BTC: Rp XXX (▲ +5.2% 7d) | Sentiment: 62 Greed | MA7: above ✅ | Volume: rising"
+- Include: price in IDR (×16,000), trend direction, volume, sentiment, key levels
+- Risk warning: "This is analysis, NOT financial advice. Always DYOR."
+
+**Step 4: Execute trade** (if user confirms):
+- Open trading app: android_open_app("pintu") or android_open_app("tokocrypto")
+- Navigate to the coin page
+- **GUARDRAIL**: Show price + amount BEFORE tapping Buy/Sell — ask user to confirm
+- **NEVER** execute a trade without explicit user confirmation
+
+### Commodity APIs (free):
+- Gold: https://query1.finance.yahoo.com/v8/finance/chart/GC=F?interval=1d&range=1mo
+- Silver: https://query1.finance.yahoo.com/v8/finance/chart/SI=F?interval=1d&range=1mo
+- Crude Oil: https://query1.finance.yahoo.com/v8/finance/chart/CL=F?interval=1d&range=1mo
+- Natural Gas: https://query1.finance.yahoo.com/v8/finance/chart/NG=F?interval=1d&range=1mo
+- Antam gold (IDR): https://query1.finance.yahoo.com/v8/finance/chart/ANTM.JK?interval=1d&range=1mo
+
 ### WHEN user asks about translation, "terjemahkan", "translate":
 http_request(method="GET", url="https://api.mymemory.translated.net/get?q=TEXT&langpair=en|id")
 5K words/day free. Pairs: en|id, id|en, en|ja, en|ko, en|zh, en|ar, etc.

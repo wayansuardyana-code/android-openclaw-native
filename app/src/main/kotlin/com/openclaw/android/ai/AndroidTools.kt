@@ -413,13 +413,18 @@ NOTE: This app ($pkg) has NO accessibility elements — it may use Flutter/React
                     var resolvedPkg = pkg
                     if (intent == null) {
                         ServiceState.addLog("App not found by package: $pkg — searching by name...")
-                        val searchTerm = pkg.lowercase().replace("com.", "").replace(".", " ")
+                        // Skip generic words that match everything
+                        val genericWords = setOf("com", "app", "android", "mobile", "id", "org", "net", "io", "co", "main", "debug", "the", "my")
+                        val searchWords = pkg.lowercase()
+                            .split(".", " ", "_", "-")
+                            .filter { it.length > 2 && it !in genericWords }
+                        ServiceState.addLog("Search words: $searchWords")
                         val installed = pm.getInstalledApplications(0)
                         val match = installed.firstOrNull { appInfo ->
                             val label = pm.getApplicationLabel(appInfo).toString().lowercase()
-                            label.contains(searchTerm) || searchTerm.contains(label) ||
-                            label.contains(pkg.substringAfterLast(".").lowercase()) ||
-                            appInfo.packageName.lowercase().contains(searchTerm.replace(" ", ""))
+                            val pkgLower = appInfo.packageName.lowercase()
+                            // Match: any meaningful search word in label OR package name
+                            searchWords.any { word -> label.contains(word) || pkgLower.contains(word) }
                         }
                         if (match != null) {
                             resolvedPkg = match.packageName
@@ -430,12 +435,13 @@ NOTE: This app ($pkg) has NO accessibility elements — it may use Flutter/React
 
                     // If still not found, list similar apps
                     if (intent == null) {
-                        val installed = pm.getInstalledApplications(0)
-                        val suggestions = installed.filter { appInfo ->
+                        val allApps = pm.getInstalledApplications(0)
+                        val suggestWords = pkg.lowercase().split(".", " ", "_", "-")
+                            .filter { it.length > 2 && it !in setOf("com", "app", "android", "mobile", "id", "org", "net", "io", "co", "main", "debug", "the", "my") }
+                        val suggestions = allApps.filter { appInfo ->
                             val label = pm.getApplicationLabel(appInfo).toString().lowercase()
                             val pkgLower = appInfo.packageName.lowercase()
-                            val terms = pkg.lowercase().split(".", " ", "_")
-                            terms.any { term -> term.length > 2 && (label.contains(term) || pkgLower.contains(term)) }
+                            suggestWords.any { word: String -> label.contains(word) || pkgLower.contains(word) }
                         }.take(5).map { appInfo ->
                             val label = pm.getApplicationLabel(appInfo).toString()
                             """{"name":"$label","package":"${appInfo.packageName}"}"""

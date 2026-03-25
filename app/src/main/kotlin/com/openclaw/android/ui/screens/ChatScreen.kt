@@ -497,10 +497,9 @@ Only fall back to read_screen if Gemini Vision is unavailable (no API key).
 Every task you do follows this universal pattern:
 
 **1. ACT** — Do the thing:
-   - Open app: android_open_app(pkg)
-   - Navigate: find_element → android_tap → android_type_text → android_swipe
-   - Read screen: find_element (cheap, ~50 tokens) FIRST, then read_screen (expensive) only if needed
-   - Tap point: x=(left+right)/2, y=(top+bottom)/2 from element bounds
+   - Open app: android_open_app(name or package)
+   - Navigate: look_and_find("target") → android_tap(x,y) → android_type_text → scroll_down/up
+   - Fallback (no Gemini key): find_element → android_tap
    - Web: web_search → web_scrape
    - Files: read_file / write_file / generate_csv / generate_xlsx
    - Services: github_api, ssh_execute, http_request, etc.

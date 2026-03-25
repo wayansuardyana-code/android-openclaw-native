@@ -467,18 +467,24 @@ NOTE: This app ($pkg) has NO accessibility elements — it may use Flutter/React
                         val elements = reader.findElement(target)
                         if (elements.size() > 0) {
                             val first = elements.get(0).asJsonObject
-                            val x = first.get("x")?.asInt ?: 540
-                            val y = first.get("y")?.asInt ?: 960
-                            return """{"found":true,"method":"accessibility","target":${gson.toJson(target)},"x":$x,"y":$y,"hint":"No Gemini key — used accessibility tree fallback"}"""
+                            val x = first.get("x")?.asInt
+                            val y = first.get("y")?.asInt
+                            val warning = if (x == null || y == null) ""","warning":"coordinates estimated, may be inaccurate"""" else ""
+                            return """{"found":true,"method":"accessibility","target":${gson.toJson(target)},"x":${x ?: 540},"y":${y ?: 960}$warning}"""
                         }
                         return """{"found":false,"error":"No Gemini API key and element not found in accessibility tree. Add Gemini key in Settings for vision-based search."}"""
                     }
+
+                    // Get real screen dimensions
+                    val dm = com.openclaw.android.OpenClawApplication.instance.resources.displayMetrics
+                    val screenW = dm.widthPixels
+                    val screenH = dm.heightPixels
 
                     // Send to Gemini Vision with coordinate extraction prompt
                     val imageBytes = file.readBytes()
                     val base64Image = android.util.Base64.encodeToString(imageBytes, android.util.Base64.NO_WRAP)
 
-                    val prompt = """You are a screen coordinate finder for an Android phone (1080x2400 resolution).
+                    val prompt = """You are a screen coordinate finder for an Android phone (${screenW}x${screenH} resolution).
 Look at this screenshot and find: "$target"${if (extraContext.isNotBlank()) " ($extraContext)" else ""}
 
 RESPOND WITH ONLY THIS JSON FORMAT (no other text):
@@ -488,8 +494,8 @@ If not found:
 {"found":false,"description":"what you see instead"}
 
 Rules:
-- x is horizontal (0=left, 1080=right)
-- y is vertical (0=top, 2400=bottom)
+- x is horizontal (0=left, ${screenW}=right)
+- y is vertical (0=top, ${screenH}=bottom)
 - Return the CENTER point of the element
 - Be precise — coordinates must be tappable"""
 
@@ -513,15 +519,14 @@ Rules:
                         })
                     }
 
+                    val client = io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
+                        engine { config { readTimeout(15, java.util.concurrent.TimeUnit.SECONDS) } }
+                    }
                     try {
-                        val client = io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
-                            engine { config { readTimeout(15, java.util.concurrent.TimeUnit.SECONDS) } }
-                        }
                         val resp = client.post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$geminiKey") {
                             contentType(ContentType.Application.Json)
                             setBody(requestBody.toString())
                         }
-                        client.close()
                         val respText = resp.bodyAsText()
 
                         val respJson = try { com.google.gson.JsonParser.parseString(respText).asJsonObject } catch (_: Exception) {
@@ -539,8 +544,8 @@ Rules:
 
                         ServiceState.addLog("look_and_find: target='$target' → $text")
 
-                        // Parse JSON from Gemini's response
-                        val jsonMatch = Regex("\\{[^}]+\\}").find(text)
+                        // Parse JSON from Gemini's response (greedy regex handles nested objects)
+                        val jsonMatch = Regex("\\{.*\\}", RegexOption.DOT_MATCHES_ALL).find(text)
                         if (jsonMatch != null) {
                             try {
                                 val result = com.google.gson.JsonParser.parseString(jsonMatch.value).asJsonObject
@@ -553,6 +558,8 @@ Rules:
                     } catch (e: Exception) {
                         ServiceState.addLog("look_and_find error: ${e.message?.take(80)}")
                         """{"found":false,"error":"Vision API failed: ${e.message?.take(100)?.replace("\"", "'")}"}"""
+                    } finally {
+                        client.close()
                     }
                 }
 
@@ -578,11 +585,13 @@ Rules:
                     val imageBytes = file.readBytes()
                     val base64Image = android.util.Base64.encodeToString(imageBytes, android.util.Base64.NO_WRAP)
 
+                    val dm2 = com.openclaw.android.OpenClawApplication.instance.resources.displayMetrics
                     val prompt = """Describe this Android screen in detail for a blind AI agent that needs to interact with it.
+Screen resolution: ${dm2.widthPixels}x${dm2.heightPixels}
 For EACH interactive element (buttons, tabs, inputs, links, icons), provide:
 - What it is (button, tab, input field, icon, text link)
 - Its label/text
-- Approximate position as tap coordinates (x, y) where screen is 1080x2400
+- Tap coordinates (x, y) where 0,0=top-left, ${dm2.widthPixels},${dm2.heightPixels}=bottom-right
 - Whether it looks tappable
 
 Format as a structured list. Be precise with coordinates — they will be used for tapping."""
@@ -603,15 +612,14 @@ Format as a structured list. Be precise with coordinates — they will be used f
                         add("contents", contents)
                     }
 
+                    val client = io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
+                        engine { config { readTimeout(30, java.util.concurrent.TimeUnit.SECONDS) } }
+                    }
                     try {
-                        val client = io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
-                            engine { config { readTimeout(30, java.util.concurrent.TimeUnit.SECONDS) } }
-                        }
                         val resp = client.post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$geminiKey") {
                             contentType(ContentType.Application.Json)
                             setBody(requestBody.toString())
                         }
-                        client.close()
                         val respText = resp.bodyAsText()
                         val respJson = try { com.google.gson.JsonParser.parseString(respText).asJsonObject } catch (_: Exception) {
                             return """{"error":"Vision API returned invalid response: ${respText.take(100).replace("\"", "'")}"}"""
@@ -629,6 +637,8 @@ Format as a structured list. Be precise with coordinates — they will be used f
                         """{"method":"vision","description":${gson.toJson(text)},"screenshot":"${file.absolutePath}"}"""
                     } catch (e: Exception) {
                         """{"error":"Vision failed: ${e.message?.take(100)?.replace("\"", "'")}"}"""
+                    } finally {
+                        client.close()
                     }
                 }
 
@@ -790,15 +800,14 @@ Format as a structured list. Be precise with coordinates — they will be used f
                         add("contents", contents)
                     }
 
+                    val visionClient = io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
+                        engine { config { readTimeout(30, java.util.concurrent.TimeUnit.SECONDS) } }
+                    }
                     try {
-                        val client = io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
-                            engine { config { readTimeout(30, java.util.concurrent.TimeUnit.SECONDS) } }
-                        }
-                        val resp = client.post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$geminiKey") {
+                        val resp = visionClient.post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$geminiKey") {
                             contentType(ContentType.Application.Json)
                             setBody(requestBody.toString())
                         }
-                        client.close()
                         val respText = resp.bodyAsText()
                         ServiceState.addLog("Vision API response: ${respText.take(200)}")
                         val respJson = try {
@@ -825,6 +834,8 @@ Format as a structured list. Be precise with coordinates — they will be used f
                     } catch (e: Exception) {
                         ServiceState.addLog("Vision error: ${e.message?.take(80)}")
                         """{"error":"Vision API failed: ${e.message?.take(100)?.replace("\"", "'")}","screenshot":"${file.absolutePath}"}"""
+                    } finally {
+                        visionClient.close()
                     }
                 }
                 "take_screenshot" -> {
@@ -922,8 +933,8 @@ Format as a structured list. Be precise with coordinates — they will be used f
                 "android_long_press" -> {
                     val reader = ScreenReaderService.instance
                         ?: return """{"error":"Accessibility service not enabled"}"""
-                    val x = args.get("x").asFloat
-                    val y = args.get("y").asFloat
+                    val x = args.get("x")?.asFloat ?: return """{"error":"Missing required parameter 'x'"}"""
+                    val y = args.get("y")?.asFloat ?: return """{"error":"Missing required parameter 'y'"}"""
                     val duration = args.get("duration_ms")?.asLong?.coerceAtLeast(500L) ?: 600L
                     val success = suspendCancellableCoroutine<Boolean> { cont ->
                         reader.longPress(x, y, duration) { result -> cont.resume(result) }

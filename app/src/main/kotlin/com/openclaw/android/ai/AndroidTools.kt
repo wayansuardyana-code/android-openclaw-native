@@ -5,6 +5,11 @@ import com.google.gson.JsonObject
 import com.openclaw.android.service.NotificationReaderService
 import com.openclaw.android.service.ScreenReaderService
 import com.openclaw.android.util.ServiceState
+import io.ktor.client.*
+import io.ktor.client.engine.okhttp.*
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
@@ -143,6 +148,16 @@ object AndroidTools {
             name = "android_read_notifications",
             description = "Read all current notifications on the device. Returns app name, title, text for each notification.",
             inputSchema = mapOf("type" to "object", "properties" to emptyMap<String, Any>())
+        ),
+        ToolDef(
+            name = "analyze_screenshot",
+            description = "Take a screenshot and send it to a vision model (Gemini) to describe what's on screen. Returns a detailed text description of the UI — buttons, images, text, layout. MUCH better than read_screen for complex UIs, image-heavy apps, or when accessibility tree is incomplete. Requires a Gemini API key configured in Settings → Google/Gemini.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "question" to mapOf("type" to "string", "description" to "Optional: specific question about the screen, e.g. 'what hotels are shown?' or 'where is the search button?'")
+                )
+            )
         ),
         ToolDef(
             name = "take_screenshot",
@@ -353,6 +368,81 @@ object AndroidTools {
                     val listener = NotificationReaderService.instance
                         ?: return """{"error":"Notification listener not enabled"}"""
                     listener.getActiveNotificationsJson().toString()
+                }
+                "analyze_screenshot" -> {
+                    // Phase 9: Vision model analysis of screenshot
+                    // Step 1: Take screenshot
+                    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {
+                        return """{"error":"Screenshot requires Android 11+"}"""
+                    }
+                    val reader = ScreenReaderService.instance
+                        ?: return """{"error":"Accessibility service not enabled"}"""
+                    val context = com.openclaw.android.OpenClawApplication.instance
+                    val dir = java.io.File(context.filesDir, "screenshots")
+                    dir.mkdirs()
+                    val file = java.io.File(dir, "vision_${System.currentTimeMillis()}.png")
+                    val ssResult = reader.captureScreenshot(file.absolutePath)
+
+                    if (!file.exists() || file.length() == 0L) {
+                        return """{"error":"Screenshot failed: $ssResult"}"""
+                    }
+
+                    // Step 2: Send to Gemini Vision API
+                    val geminiKey = com.openclaw.android.ai.AgentConfig.getKeyForProvider("gemini")
+                        .ifBlank { com.openclaw.android.ai.AgentConfig.getKeyForProvider("google") }
+                    if (geminiKey.isBlank()) {
+                        // Fallback: return screenshot path + accessibility tree instead
+                        val tree = reader.readScreen().toString().take(3000)
+                        return """{"fallback":true,"note":"No Gemini API key — returning screenshot path + accessibility tree. Add Gemini key in Settings for vision analysis.","screenshot":"${file.absolutePath}","accessibility_tree":${com.google.gson.Gson().toJson(tree)}}"""
+                    }
+
+                    // Encode screenshot as base64
+                    val imageBytes = file.readBytes()
+                    val base64Image = android.util.Base64.encodeToString(imageBytes, android.util.Base64.NO_WRAP)
+                    val question = args.get("question")?.asString ?: "Describe everything you see on this Android screen in detail. List all visible UI elements, buttons, text, images, and their approximate positions (top/middle/bottom, left/center/right)."
+
+                    // Call Gemini Vision API
+                    val requestBody = com.google.gson.JsonObject().apply {
+                        val contents = com.google.gson.JsonArray()
+                        val content = com.google.gson.JsonObject().apply {
+                            val parts = com.google.gson.JsonArray()
+                            parts.add(com.google.gson.JsonObject().apply { addProperty("text", question) })
+                            parts.add(com.google.gson.JsonObject().apply {
+                                add("inline_data", com.google.gson.JsonObject().apply {
+                                    addProperty("mime_type", "image/png")
+                                    addProperty("data", base64Image)
+                                })
+                            })
+                            add("parts", parts)
+                        }
+                        contents.add(content)
+                        add("contents", contents)
+                    }
+
+                    try {
+                        val client = io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
+                            engine { config { readTimeout(30, java.util.concurrent.TimeUnit.SECONDS) } }
+                        }
+                        val resp = client.post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$geminiKey") {
+                            contentType(ContentType.Application.Json)
+                            setBody(requestBody.toString())
+                        }
+                        client.close()
+                        val respText = resp.bodyAsText()
+                        val respJson = com.google.gson.JsonParser.parseString(respText).asJsonObject
+                        val text = respJson.getAsJsonArray("candidates")
+                            ?.get(0)?.asJsonObject
+                            ?.getAsJsonObject("content")
+                            ?.getAsJsonArray("parts")
+                            ?.get(0)?.asJsonObject
+                            ?.get("text")?.asString ?: "Vision analysis failed"
+
+                        ServiceState.addLog("Vision: analyzed screenshot (${text.length} chars)")
+                        """{"success":true,"description":${com.google.gson.Gson().toJson(text)},"screenshot":"${file.absolutePath}"}"""
+                    } catch (e: Exception) {
+                        ServiceState.addLog("Vision error: ${e.message?.take(80)}")
+                        """{"error":"Vision API failed: ${e.message?.take(100)?.replace("\"", "'")}","screenshot":"${file.absolutePath}"}"""
+                    }
                 }
                 "take_screenshot" -> {
                     if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {

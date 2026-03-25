@@ -149,6 +149,7 @@ class AgentLoop(private val llmClient: LlmClient) {
         val tools = AndroidTools.getToolDefinitions()
         var step = 0
         var embeddedToolCount = 0
+        var nudgeCount = 0
         val toolsUsed = mutableListOf<String>() // Track for auto-learn
 
         try {
@@ -308,14 +309,18 @@ class AgentLoop(private val llmClient: LlmClient) {
                 }
 
                 // Plain text response — check if agent SHOULD have called a tool
-                // If step 1 and no tools used and user asked for action → nudge agent to use tools
-                if (step == 1 && toolsUsed.isEmpty() && looksLikeActionRequest(userMessage)) {
-                    ServiceState.addLog("Agent: text-only response on action request — nudging to use tools")
+                // Nudge up to 3 times if task looks incomplete
+                val isActionRequest = looksLikeActionRequest(userMessage)
+                val taskLooksIncomplete = isActionRequest && step < maxSteps - 2 && nudgeCount < 3
+                if (taskLooksIncomplete) {
+                    nudgeCount++
+                    ServiceState.addLog("Agent: text-only response on action request — nudging ($nudgeCount/3)")
                     messages.add(LlmClient.Message("assistant", content))
                     messages.add(LlmClient.Message("user",
-                        "[SYSTEM: You just replied with text but the user asked you to DO something. " +
-                        "You MUST call a tool NOW. Use android_read_screen to see the current state, " +
-                        "then take action. DO NOT reply with text again — call a tool.]"))
+                        "[SYSTEM: You replied with text but the task is NOT complete yet. " +
+                        "The user asked you to: ${userMessage.take(100)}. " +
+                        "You MUST call a tool NOW to continue. Use look_and_find or android_read_screen to see the current state, " +
+                        "then take the next action. DO NOT reply with text — call a tool.]"))
                     continue // Retry with nudge
                 }
 

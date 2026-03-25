@@ -62,20 +62,7 @@ object ServiceTools {
                 "required" to listOf("table")
             )
         ),
-        // ── Google Workspace ──
-        ToolDef(
-            name = "google_workspace",
-            description = "Interact with Google Workspace APIs (Drive, Sheets, Docs, Calendar, Gmail). Requires Google OAuth token or service account key.",
-            inputSchema = mapOf(
-                "type" to "object",
-                "properties" to mapOf(
-                    "service" to mapOf("type" to "string", "description" to "drive, sheets, docs, calendar, gmail"),
-                    "action" to mapOf("type" to "string", "description" to "list, get, create, update, delete, search"),
-                    "params" to mapOf("type" to "string", "description" to "JSON params for the action")
-                ),
-                "required" to listOf("service", "action")
-            )
-        ),
+        // google_workspace is defined in UtilityTools (with auto-refresh) — removed from here to avoid duplicate
         // ── Generic REST API ──
         ToolDef(
             name = "authenticated_api",
@@ -133,7 +120,7 @@ object ServiceTools {
                 "github_api" -> githubApi(args)
                 "vercel_api" -> vercelApi(args)
                 "supabase_query" -> supabaseQuery(args)
-                "google_workspace" -> googleWorkspace(args)
+                // google_workspace is handled by UtilityTools (with auto-refresh)
                 "authenticated_api" -> authenticatedApi(args)
                 "ssh_execute" -> sshExecute(args)
                 "postgres_query" -> postgresQuery(args)

@@ -72,10 +72,9 @@ object AppUpdater {
                 }
             }
 
-            // If no APK in release, use VPS as last resort (HTTPS not available on VPS)
-            // Prefer GitHub release URL (already HTTPS) — VPS only if no asset found
+            // If no APK asset in release, construct expected URL as fallback
             if (apkUrl.isBlank()) {
-                // Try GitHub release tarball redirect as fallback before raw VPS
+                // Try expected APK naming convention for the release tag
                 apkUrl = "https://github.com/$REPO/releases/download/$tagName/openclaw-android-${tagName}-debug.apk"
             }
 

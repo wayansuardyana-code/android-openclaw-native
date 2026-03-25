@@ -144,7 +144,7 @@ class HeartbeatService {
                 !result.contains("no action needed", ignoreCase = true) &&
                 result.length > 50
             if (shouldNotify) {
-                NotificationHelper.notifyAgentResponse("Nate (auto)", result.take(200))
+                NotificationHelper.notifyAgentResponse("OpenClaw (auto)", result.take(200))
             }
 
         } catch (e: Exception) {

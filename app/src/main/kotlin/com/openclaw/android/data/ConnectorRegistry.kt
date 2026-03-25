@@ -8,7 +8,7 @@ object ConnectorRegistry {
         ConnectorEntity("llm_anthropic", "llm", "Anthropic Claude", "Claude Sonnet, Opus, Haiku", "Psychology", configJson = """{"apiKey":"","model":"claude-sonnet-4-6","baseUrl":"https://api.anthropic.com"}"""),
         ConnectorEntity("llm_openai", "llm", "OpenAI", "GPT-5, GPT-4o, o-series", "AutoAwesome", configJson = """{"apiKey":"","model":"gpt-5.4","baseUrl":"https://api.openai.com"}"""),
         ConnectorEntity("llm_google", "llm", "Google Gemini", "Gemini 3.1, 2.5 Pro/Flash", "AutoAwesome", configJson = """{"apiKey":"","model":"gemini-3.1-pro","baseUrl":"https://generativelanguage.googleapis.com"}"""),
-        ConnectorEntity("llm_minimax", "llm", "MiniMax", "MiniMax M2.5 (current AdvanClaw)", "AutoAwesome", configJson = """{"apiKey":"","model":"m2.5","baseUrl":"https://api.minimax.io/anthropic"}"""),
+        ConnectorEntity("llm_minimax", "llm", "MiniMax", "MiniMax M2.5", "AutoAwesome", configJson = """{"apiKey":"","model":"m2.5","baseUrl":"https://api.minimax.io/anthropic"}"""),
         ConnectorEntity("llm_openrouter", "llm", "OpenRouter", "Multi-provider gateway", "Router", configJson = """{"apiKey":"","model":"","baseUrl":"https://openrouter.ai/api"}"""),
         ConnectorEntity("llm_ollama", "llm", "Ollama (Local)", "Self-hosted models", "Dns", configJson = """{"baseUrl":"http://localhost:11434","model":"llama3.2"}"""),
         ConnectorEntity("llm_custom", "llm", "Custom API", "Any OpenAI-compatible API", "Api", configJson = """{"apiKey":"","model":"","baseUrl":""}"""),

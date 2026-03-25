@@ -19,6 +19,7 @@ import io.ktor.client.*
 import io.ktor.client.engine.okhttp.*
 import io.ktor.client.request.*
 import io.ktor.client.request.forms.*
+import io.ktor.client.request.put
 import io.ktor.client.statement.*
 import io.ktor.http.*
 
@@ -373,6 +374,20 @@ object UtilityTools {
                 "required" to listOf("id")
             )
         ),
+        ToolDef(
+            name = "google_workspace",
+            description = "Call Google Workspace REST APIs (Drive, Sheets, Gmail, Calendar, Docs). Requires OAuth2 access token configured in Settings. Use for creating/editing/sending — for reading, prefer opening the Google app via AccessibilityService.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "service" to mapOf("type" to "string", "description" to "Google service: drive, sheets, gmail, calendar, docs",
+                        "enum" to listOf("drive", "sheets", "gmail", "calendar", "docs")),
+                    "action" to mapOf("type" to "string", "description" to "Action to perform (e.g., 'list_files', 'create_sheet', 'send_email', 'create_event', 'create_doc')"),
+                    "params" to mapOf("type" to "object", "description" to "Action-specific parameters (see action descriptions)")
+                ),
+                "required" to listOf("service", "action")
+            )
+        ),
     )
 
     suspend fun executeTool(name: String, args: JsonObject): String {
@@ -702,6 +717,29 @@ object UtilityTools {
                     val db = com.openclaw.android.data.AppDatabase.getInstance(OpenClawApplication.instance)
                     db.scheduledTaskDao().deleteById(id)
                     """{"success":true,"deleted_id":$id}"""
+                }
+
+                "google_workspace" -> {
+                    val token = AgentConfig.getKeyForProvider("google_oauth")
+                    if (token.isBlank()) return@withContext """{"error":"Google OAuth2 token not configured. Go to Settings → Services → add 'google_oauth' with your access token. See User Guide for setup instructions."}"""
+
+                    val service = args.get("service").asString
+                    val action = args.get("action").asString
+                    val params = args.getAsJsonObject("params") ?: JsonObject()
+
+                    try {
+                        val result = when (service) {
+                            "drive" -> googleDrive(token, action, params)
+                            "sheets" -> googleSheets(token, action, params)
+                            "gmail" -> googleGmail(token, action, params)
+                            "calendar" -> googleCalendar(token, action, params)
+                            "docs" -> googleDocs(token, action, params)
+                            else -> """{"error":"Unknown service: $service"}"""
+                        }
+                        result
+                    } catch (e: Exception) {
+                        """{"error":"Google API error: ${e.message?.take(200)}"}"""
+                    }
                 }
 
                 else -> """{"error":"Unknown tool: $name"}"""
@@ -1192,5 +1230,152 @@ object UtilityTools {
         } catch (e: Exception) {
             """{"error":"Firecrawl scrape failed: ${e.message?.replace("\"", "'")}"}"""
         }
+    }
+
+    // ── Google Workspace API helpers ──────────────────────────────────────
+
+    private suspend fun googleDrive(token: String, action: String, params: JsonObject): String {
+        val baseUrl = "https://www.googleapis.com/drive/v3"
+        return when (action) {
+            "list_files" -> {
+                val q = params.get("query")?.asString ?: ""
+                val pageSize = params.get("limit")?.asInt ?: 10
+                val url = "$baseUrl/files?pageSize=$pageSize&fields=files(id,name,mimeType,modifiedTime,size)${if (q.isNotBlank()) "&q=${java.net.URLEncoder.encode(q, "UTF-8")}" else ""}"
+                googleGet(token, url)
+            }
+            "get_file" -> {
+                val fileId = params.get("file_id")?.asString ?: return """{"error":"file_id required"}"""
+                googleGet(token, "$baseUrl/files/$fileId?fields=id,name,mimeType,modifiedTime,size,webViewLink")
+            }
+            "create_folder" -> {
+                val name = params.get("name")?.asString ?: return """{"error":"name required"}"""
+                val body = JsonObject().apply {
+                    addProperty("name", name)
+                    addProperty("mimeType", "application/vnd.google-apps.folder")
+                }
+                googlePost(token, "$baseUrl/files", body.toString())
+            }
+            else -> """{"error":"Unknown drive action: $action. Available: list_files, get_file, create_folder"}"""
+        }
+    }
+
+    private suspend fun googleSheets(token: String, action: String, params: JsonObject): String {
+        val baseUrl = "https://sheets.googleapis.com/v4/spreadsheets"
+        return when (action) {
+            "create" -> {
+                val title = params.get("title")?.asString ?: "Untitled"
+                val body = """{"properties":{"title":"$title"}}"""
+                googlePost(token, baseUrl, body)
+            }
+            "read" -> {
+                val id = params.get("spreadsheet_id")?.asString ?: return """{"error":"spreadsheet_id required"}"""
+                val range = params.get("range")?.asString ?: "Sheet1"
+                googleGet(token, "$baseUrl/$id/values/${java.net.URLEncoder.encode(range, "UTF-8")}")
+            }
+            "append" -> {
+                val id = params.get("spreadsheet_id")?.asString ?: return """{"error":"spreadsheet_id required"}"""
+                val range = params.get("range")?.asString ?: "Sheet1"
+                val values = params.get("values")?.toString() ?: return """{"error":"values required (2D array)"}"""
+                val body = """{"values":$values}"""
+                val url = "$baseUrl/$id/values/${java.net.URLEncoder.encode(range, "UTF-8")}:append?valueInputOption=USER_ENTERED"
+                googlePost(token, url, body)
+            }
+            "update" -> {
+                val id = params.get("spreadsheet_id")?.asString ?: return """{"error":"spreadsheet_id required"}"""
+                val range = params.get("range")?.asString ?: return """{"error":"range required"}"""
+                val values = params.get("values")?.toString() ?: return """{"error":"values required"}"""
+                val body = """{"values":$values}"""
+                val url = "$baseUrl/$id/values/${java.net.URLEncoder.encode(range, "UTF-8")}?valueInputOption=USER_ENTERED"
+                googlePut(token, url, body)
+            }
+            else -> """{"error":"Unknown sheets action: $action. Available: create, read, append, update"}"""
+        }
+    }
+
+    private suspend fun googleGmail(token: String, action: String, params: JsonObject): String {
+        val baseUrl = "https://gmail.googleapis.com/gmail/v1/users/me"
+        return when (action) {
+            "list" -> {
+                val q = params.get("query")?.asString ?: ""
+                val limit = params.get("limit")?.asInt ?: 10
+                googleGet(token, "$baseUrl/messages?maxResults=$limit${if (q.isNotBlank()) "&q=${java.net.URLEncoder.encode(q, "UTF-8")}" else ""}")
+            }
+            "read" -> {
+                val id = params.get("message_id")?.asString ?: return """{"error":"message_id required"}"""
+                googleGet(token, "$baseUrl/messages/$id?format=full")
+            }
+            "send" -> {
+                val to = params.get("to")?.asString ?: return """{"error":"to required"}"""
+                val subject = params.get("subject")?.asString ?: ""
+                val body = params.get("body")?.asString ?: ""
+                val raw = android.util.Base64.encodeToString(
+                    "To: $to\r\nSubject: $subject\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n$body".toByteArray(),
+                    android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP
+                )
+                googlePost(token, "$baseUrl/messages/send", """{"raw":"$raw"}""")
+            }
+            else -> """{"error":"Unknown gmail action: $action. Available: list, read, send"}"""
+        }
+    }
+
+    private suspend fun googleCalendar(token: String, action: String, params: JsonObject): String {
+        val baseUrl = "https://www.googleapis.com/calendar/v3"
+        return when (action) {
+            "list_events" -> {
+                val calId = params.get("calendar_id")?.asString ?: "primary"
+                val timeMin = params.get("time_min")?.asString ?: java.time.Instant.now().toString()
+                googleGet(token, "$baseUrl/calendars/$calId/events?maxResults=10&timeMin=${java.net.URLEncoder.encode(timeMin, "UTF-8")}&singleEvents=true&orderBy=startTime")
+            }
+            "create_event" -> {
+                val calId = params.get("calendar_id")?.asString ?: "primary"
+                val summary = params.get("summary")?.asString ?: return """{"error":"summary required"}"""
+                val start = params.get("start")?.asString ?: return """{"error":"start required (ISO datetime)"}"""
+                val end = params.get("end")?.asString ?: return """{"error":"end required (ISO datetime)"}"""
+                val body = """{"summary":"$summary","start":{"dateTime":"$start","timeZone":"Asia/Jakarta"},"end":{"dateTime":"$end","timeZone":"Asia/Jakarta"}}"""
+                googlePost(token, "$baseUrl/calendars/$calId/events", body)
+            }
+            else -> """{"error":"Unknown calendar action: $action. Available: list_events, create_event"}"""
+        }
+    }
+
+    private suspend fun googleDocs(token: String, action: String, params: JsonObject): String {
+        val baseUrl = "https://docs.googleapis.com/v1/documents"
+        return when (action) {
+            "create" -> {
+                val title = params.get("title")?.asString ?: "Untitled"
+                googlePost(token, baseUrl, """{"title":"$title"}""")
+            }
+            "read" -> {
+                val docId = params.get("document_id")?.asString ?: return """{"error":"document_id required"}"""
+                googleGet(token, "$baseUrl/$docId")
+            }
+            else -> """{"error":"Unknown docs action: $action. Available: create, read"}"""
+        }
+    }
+
+    // HTTP helpers for Google APIs
+    private suspend fun googleGet(token: String, url: String): String {
+        val resp = sharedHttpClient.get(url) {
+            header("Authorization", "Bearer $token")
+        }
+        return resp.bodyAsText().take(4000)
+    }
+
+    private suspend fun googlePost(token: String, url: String, body: String): String {
+        val resp = sharedHttpClient.post(url) {
+            header("Authorization", "Bearer $token")
+            contentType(io.ktor.http.ContentType.Application.Json)
+            setBody(body)
+        }
+        return resp.bodyAsText().take(4000)
+    }
+
+    private suspend fun googlePut(token: String, url: String, body: String): String {
+        val resp = sharedHttpClient.put(url) {
+            header("Authorization", "Bearer $token")
+            contentType(io.ktor.http.ContentType.Application.Json)
+            setBody(body)
+        }
+        return resp.bodyAsText().take(4000)
     }
 }

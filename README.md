@@ -14,13 +14,13 @@ It's not a chatbot. It's a **doer**.
 
 ```
 You: "Search YouTube for lofi music and play the first result"
-Nate: Opens YouTube → taps search → types "lofi music" → taps first video → playing.
+OpenClaw: Opens YouTube → taps search → types "lofi music" → taps first video → playing.
 
 You: "Check NVIDIA stock price, make an Excel report, send to my Telegram"
-Nate: Calls Finnhub API → generates XLSX → sends via Telegram Bot → done.
+OpenClaw: Calls Finnhub API → generates XLSX → sends via Telegram Bot → done.
 
 You: "Every morning at 8, check weather in Bali and text me"
-Nate: Saves to schedule → HeartbeatService runs at 8am → weather API → Telegram message.
+OpenClaw: Saves to schedule → HeartbeatService runs at 8am → weather API → Telegram message.
 ```
 
 ---
@@ -169,7 +169,7 @@ Edit any file from the **Files** tab in the app.
 ## Build from Source
 
 ```bash
-git clone https://github.com/wayansuardyana-code/android-openclaw-native.git
+git clone https://github.com/anthropics/android-openclaw-native.git
 cd android-openclaw-native
 export ANDROID_HOME=/path/to/android-sdk
 ./gradlew assembleDebug

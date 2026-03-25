@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Google OAuth2 Setup Guide</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0D1117; color: #F0F6FC; font-family: 'Segoe UI', system-ui, sans-serif; padding: 16px; line-height: 1.6; }
+h1 { color: #58A6FF; font-size: 22px; margin-bottom: 8px; }
+h2 { color: #58A6FF; font-size: 17px; margin: 20px 0 8px; border-bottom: 1px solid #30363D; padding-bottom: 4px; }
+h3 { color: #D2A8FF; font-size: 15px; margin: 14px 0 6px; }
+p, li { font-size: 14px; color: #C9D1D9; margin-bottom: 6px; }
+ol, ul { padding-left: 20px; }
+ol li { margin-bottom: 10px; }
+code { background: #161B22; color: #3FB950; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+.step { background: #161B22; border: 1px solid #30363D; border-radius: 8px; padding: 12px; margin: 8px 0; }
+.step-num { background: #58A6FF; color: #0D1117; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; font-size: 13px; margin-right: 8px; }
+.warn { background: #1C1207; border: 1px solid #D29922; border-radius: 8px; padding: 10px; margin: 10px 0; }
+.warn-title { color: #D29922; font-weight: bold; font-size: 14px; }
+.info { background: #0C2D48; border: 1px solid #58A6FF; border-radius: 8px; padding: 10px; margin: 10px 0; }
+.time { color: #8B949E; font-size: 12px; }
+a { color: #58A6FF; }
+.copy-box { background: #010409; border: 1px solid #30363D; border-radius: 6px; padding: 10px; font-family: monospace; font-size: 12px; color: #3FB950; word-break: break-all; margin: 6px 0; }
+</style>
+</head>
+<body>
+
+<h1>Google Workspace Setup</h1>
+<p class="time">One-time setup ~ 5 minutes</p>
+
+<div class="info">
+<p><strong>Why?</strong> OpenClaw needs an OAuth2 token to create Google Sheets, send Gmail, manage Calendar events, etc. Reading files via the Google apps on your phone works without this — but creating/editing needs API access.</p>
+</div>
+
+<h2>Step 1: Create a Google Cloud Project</h2>
+
+<div class="step">
+<p><span class="step-num">1</span> Open <a href="https://console.cloud.google.com/">console.cloud.google.com</a></p>
+<p><span class="step-num">2</span> Click <strong>"Select a project"</strong> (top bar) → <strong>"New Project"</strong></p>
+<p><span class="step-num">3</span> Name it <code>OpenClaw</code> → Click <strong>Create</strong></p>
+<p><span class="step-num">4</span> Make sure the new project is selected in the top bar</p>
+</div>
+
+<h2>Step 2: Enable Google APIs</h2>
+
+<div class="step">
+<p><span class="step-num">1</span> Go to <strong>APIs & Services → Library</strong></p>
+<p><span class="step-num">2</span> Search and <strong>Enable</strong> each of these:</p>
+<ul>
+<li><code>Google Drive API</code></li>
+<li><code>Google Sheets API</code></li>
+<li><code>Gmail API</code></li>
+<li><code>Google Calendar API</code></li>
+<li><code>Google Docs API</code></li>
+</ul>
+<p class="time">Click each one → click "Enable" → go back and search the next one</p>
+</div>
+
+<h2>Step 3: Create OAuth2 Credentials</h2>
+
+<div class="step">
+<p><span class="step-num">1</span> Go to <strong>APIs & Services → Credentials</strong></p>
+<p><span class="step-num">2</span> Click <strong>"+ Create Credentials"</strong> → <strong>"OAuth client ID"</strong></p>
+<p><span class="step-num">3</span> If asked to configure consent screen:</p>
+<ul>
+<li>User type: <strong>External</strong> → Create</li>
+<li>App name: <code>OpenClaw</code></li>
+<li>User support email: your email</li>
+<li>Developer contact: your email</li>
+<li>Click <strong>Save and Continue</strong> through all steps</li>
+<li>Add your own email as a <strong>Test user</strong></li>
+</ul>
+<p><span class="step-num">4</span> Back to Credentials → Create OAuth client ID:</p>
+<ul>
+<li>Application type: <strong>Web application</strong></li>
+<li>Name: <code>OpenClaw Android</code></li>
+<li>Authorized redirect URIs: add <code>https://developers.google.com/oauthplayground</code></li>
+<li>Click <strong>Create</strong></li>
+</ul>
+<p><span class="step-num">5</span> <strong>Copy the Client ID and Client Secret</strong> — you'll need them next</p>
+</div>
+
+<h2>Step 4: Get an Access Token</h2>
+
+<div class="step">
+<p><span class="step-num">1</span> Open <a href="https://developers.google.com/oauthplayground/">OAuth 2.0 Playground</a></p>
+<p><span class="step-num">2</span> Click the <strong>gear icon</strong> (top right) → check <strong>"Use your own OAuth credentials"</strong></p>
+<p><span class="step-num">3</span> Paste your <strong>Client ID</strong> and <strong>Client Secret</strong></p>
+<p><span class="step-num">4</span> In the left panel, select these scopes:</p>
+<ul>
+<li><code>Google Drive API v3</code> → select <code>../auth/drive</code></li>
+<li><code>Google Sheets API v4</code> → select <code>../auth/spreadsheets</code></li>
+<li><code>Gmail API v1</code> → select <code>../auth/gmail.modify</code></li>
+<li><code>Google Calendar API v3</code> → select <code>../auth/calendar</code></li>
+<li><code>Google Docs API v1</code> → select <code>../auth/documents</code></li>
+</ul>
+<p><span class="step-num">5</span> Click <strong>"Authorize APIs"</strong> → sign in with your Google account → Allow</p>
+<p><span class="step-num">6</span> Click <strong>"Exchange authorization code for tokens"</strong></p>
+<p><span class="step-num">7</span> <strong>Copy the Access Token</strong></p>
+</div>
+
+<div class="warn">
+<p class="warn-title">Access Token Expires!</p>
+<p>Access tokens expire after <strong>1 hour</strong>. You'll need to refresh it periodically. Copy the <strong>Refresh Token</strong> too — future versions of OpenClaw will auto-refresh.</p>
+</div>
+
+<h2>Step 5: Add Token to OpenClaw</h2>
+
+<div class="step">
+<p><span class="step-num">1</span> Go to <strong>Settings</strong> in OpenClaw</p>
+<p><span class="step-num">2</span> Tap <strong>"+"</strong> to add a new service</p>
+<p><span class="step-num">3</span> Service name: <code>google_oauth</code></p>
+<p><span class="step-num">4</span> Paste your <strong>Access Token</strong></p>
+<p><span class="step-num">5</span> Tap <strong>Save</strong></p>
+</div>
+
+<h2>Done! Try It</h2>
+
+<div class="step">
+<p>Ask OpenClaw:</p>
+<div class="copy-box">"Create a new Google Sheet called 'Budget 2026'"</div>
+<div class="copy-box">"Send an email to boss@company.com about the meeting tomorrow"</div>
+<div class="copy-box">"What's on my calendar today?"</div>
+<div class="copy-box">"List my Google Drive files"</div>
+</div>
+
+<div class="info">
+<p><strong>No token needed for reading!</strong> OpenClaw can read your Google Sheets, Docs, and Drive files by opening the apps directly on your phone. The OAuth token is only needed for <em>creating</em> and <em>editing</em> via API.</p>
+</div>
+
+</body>
+</html>

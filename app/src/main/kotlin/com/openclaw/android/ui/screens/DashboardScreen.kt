@@ -248,7 +248,7 @@ private fun TaskBoardTab() {
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         Text("Task Board", color = TEXT, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
         Spacer(Modifier.height(4.dp))
-        Text("Auto-managed by Nate. Plan via chat → Pending → Active → Done.", color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+        Text("Auto-managed by OpenClaw. Plan via chat → Pending → Active → Done.", color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
         Spacer(Modifier.height(12.dp))
 
         // Full-width kanban columns

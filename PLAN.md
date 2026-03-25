@@ -1,8 +1,8 @@
 # OpenClaw Android Native — PLAN.md
 
 > **Version:** 2.4.2
-> **Device:** ADVAN X1 (Android 14, API 34)
-> **Owner:** Wayan
+> **Device:** Android 14, API 34
+> **Owner:** (your name)
 > **Updated:** 2026-03-25
 > **Status:** Active development
 
@@ -197,11 +197,11 @@ Listed below as upcoming phases.
 | `send_telegram_document` missing | MEDIUM | FIXED v2.0.1 — new tool added |
 | Python install fails (curl not found) | LOW | Need Ktor-based download fallback |
 | Accessibility auto-disables after update | WONTFIX | Android OS behavior |
-| Shizuku not installable on ADVAN X1 | WONTFIX | Android 14 compat |
+| Shizuku not installable on some devices | WONTFIX | Android 14 compat |
 
 ---
 
-## Test Scenarios (Wayan to test on device)
+## Test Scenarios
 
 ### Test 1: NVIDIA Financial Report
 ```
@@ -253,7 +253,7 @@ Expected: supabase_query tool calls PostgREST API
 | Vercel | READY (untested) | Settings → "+" → vercel → paste API token |
 | Supabase | READY (untested) | Settings → "+" → supabase → paste anon key + URL |
 | GitHub | READY (untested) | Settings → "+" → github → paste PAT |
-| Google Workspace | BLOCKED | Waiting for OAuth2 credentials from Wayan |
+| Google Workspace | BLOCKED | Waiting for OAuth2 credentials |
 | Brave Search | PLANNED (Phase 8.5) | Settings → "+" → brave → paste API key |
 | Firecrawl | PLANNED (Phase 8.5) | Settings → "+" → firecrawl → paste API key |
 | Exa | PLANNED (Phase 8.5) | Settings → "+" → exa → paste API key |
@@ -261,7 +261,7 @@ Expected: supabase_query tool calls PostgREST API
 | Slack | PLANNED (Phase 8.5) | Settings → "+" → slack → paste xoxb- token |
 | Context7 | NOT YET | Need to add as default API connector |
 | ClawhHub | NOT YET | Need to add as default API connector |
-| SSH (VPS) | READY | Settings → "+" → ssh → host/user/password |
+| SSH (remote server) | READY | Settings → "+" → ssh → host/user/password |
 
 ---
 

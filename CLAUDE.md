@@ -154,7 +154,6 @@ This pattern ensures tasks are verifiable, results are communicated, and knowled
 - PostgreSQL JDBC removed (Android compat issue with MethodHandle on API <26) — use HTTP proxy instead
 - Shizuku integration declared but not yet connected
 - nodejs-mobile integration optional — Kotlin-native AI agent works standalone
-- APK served via `python3 -m http.server 8899` on VPS for download
 - v2.4.2 is latest build
 - v2.4.2: Security audit round 2 — Telegram auth (allowed_ids), Shizuku blocklist, DNS-resolving SSRF, overnight fix, AtomicInteger, BroadcastReceiver leak fix
 - v2.4.1: Security audit fixes — HTTPS-only APK downloads, webhook URL validation, scheduled task cap (20), SoM file cleanup, optimistic scheduled task locking
@@ -175,7 +174,6 @@ This pattern ensures tasks are verifiable, results are communicated, and knowled
 - v2.3.0: Telegram group fix — bot only responds on @mention/reply/command, not every message
 - v2.3.0: send_telegram_message supports target='group' and explicit chat_id
 - v2.3.0: GitHub Release created with APK attached (releases/tag/v2.3.0)
-- VPS APK server: python3 -m http.server 8899 in /root/apk-serve/
 - v2.2.0: 52 LLM tools (18 Android device + 22 utility + 7 service + 3 Python + 2 vision/doc)
 - v2.2.0: 15 LLM providers including Kimi/Moonshot, LLM fallback system
 - v2.2.0: analyze_screenshot (Gemini Vision) tool added
@@ -347,14 +345,6 @@ This pattern ensures tasks are verifiable, results are communicated, and knowled
 - Services section: "+" to connect from 15 available services
 - No hardcoded lists — only shows what user has configured
 - Token cards: eye toggle, copy, delete
-
-## Zuma Business Skills (generic ones applicable here)
-- data-storytelling: narrative frameworks (SCQA, pyramid) — prompt template
-- deploy-to-live: git + Vercel deploy workflow — already covered by tools
-- markitdown: file→markdown converter — needs Python runtime
-- xlsx-skill: Excel generation — already wired as generate_xlsx
-- ppt-design: HTML slide generation — possible via write_file + html
-- image-gen: Gemini image generation — possible via http_request to Gemini API
 
 ## Remaining Nice-to-Have (not blocking)
 - Streaming LLM responses

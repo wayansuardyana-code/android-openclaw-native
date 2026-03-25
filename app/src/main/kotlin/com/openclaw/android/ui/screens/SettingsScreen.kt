@@ -262,6 +262,28 @@ fun SettingsScreen(onStartService: () -> Unit = {}, onStopService: () -> Unit = 
                         Spacer(Modifier.height(4.dp))
                         Text(updateStatus, color = if (updateStatus.contains("Up to date")) GREEN else CYAN, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
                     }
+
+                    Spacer(Modifier.height(8.dp))
+
+                    // Google Workspace Setup Guide button
+                    OutlinedButton(onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                            setDataAndType(Uri.parse("file:///android_asset/google_oauth_guide.html"), "text/html")
+                            setClassName("com.android.chrome", "com.google.android.apps.chrome.Main")
+                        }
+                        try { context.startActivity(intent) } catch (_: Exception) {
+                            // Fallback: open in WebView activity or default browser
+                            try {
+                                val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("file:///android_asset/google_oauth_guide.html"))
+                                context.startActivity(webIntent)
+                            } catch (_: Exception) {
+                                android.widget.Toast.makeText(context, "Guide: Settings → add google_oauth token", android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    }, border = BorderStroke(1.dp, Color(0xFF3FB950)), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.MenuBook, null, Modifier.size(16.dp), tint = Color(0xFF3FB950)); Spacer(Modifier.width(4.dp))
+                        Text("Google Workspace Setup Guide", fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = Color(0xFF3FB950))
+                    }
                 }
             }
         }

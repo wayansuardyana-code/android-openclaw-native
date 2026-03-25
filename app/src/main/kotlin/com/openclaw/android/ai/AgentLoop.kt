@@ -112,6 +112,19 @@ class AgentLoop(private val llmClient: LlmClient) {
     private val _totalTokens = MutableStateFlow(0L)
     val totalTokens = _totalTokens.asStateFlow()
 
+    /** Live narration: broadcasts what the agent is doing at each step */
+    private val _liveNarration = MutableStateFlow("")
+    val liveNarration = _liveNarration.asStateFlow()
+
+    /** Mid-task feedback: user can inject messages while agent is working */
+    @Volatile
+    private var pendingFeedback: String? = null
+
+    fun injectFeedback(feedback: String) {
+        pendingFeedback = feedback
+        ServiceState.addLog("Agent: received mid-task feedback: ${feedback.take(60)}")
+    }
+
     /**
      * Run the agent with a user message. Returns the final text response.
      */
@@ -158,12 +171,25 @@ class AgentLoop(private val llmClient: LlmClient) {
                         val toolInput = toolCall.getAsJsonObject("input") ?: JsonObject()
 
                         toolsUsed.add(toolName)
+                        _liveNarration.value = "Step $step: $toolName"
                         ServiceState.addLog("Agent: calling tool $toolName")
                         val toolResult = AndroidTools.executeTool(toolName, toolInput)
                         ServiceState.addLog("Agent: tool $toolName returned ${toolResult.take(100)}...")
 
+                        // Narrate the result briefly
+                        val narration = narrate(toolName, toolResult)
+                        _liveNarration.value = narration
+
                         messages.add(LlmClient.Message("assistant", content))
-                        messages.add(LlmClient.Message("user", "[Tool result for $toolName]: $toolResult"))
+
+                        // Check for mid-task user feedback
+                        val feedback = pendingFeedback
+                        if (feedback != null) {
+                            pendingFeedback = null
+                            messages.add(LlmClient.Message("user", "[Tool result for $toolName]: $toolResult\n\n[USER FEEDBACK (respond to this!)]: $feedback"))
+                        } else {
+                            messages.add(LlmClient.Message("user", "[Tool result for $toolName]: $toolResult"))
+                        }
                         continue
                     } catch (e: Exception) {
                         ServiceState.addLog("Agent: tool parse error (Anthropic) — ${e.message?.take(80)}")
@@ -184,13 +210,23 @@ class AgentLoop(private val llmClient: LlmClient) {
                             val toolInput = parseLenient(argsStr, JsonObject::class.java)
 
                             toolsUsed.add(toolName)
+                            _liveNarration.value = "Step $step: $toolName"
                             ServiceState.addLog("Agent: calling tool $toolName")
                             val toolResult = AndroidTools.executeTool(toolName, toolInput)
                             results.append("[$toolName]: $toolResult\n")
                         }
 
+                        _liveNarration.value = narrate(toolsUsed.lastOrNull() ?: "tool", results.toString())
                         messages.add(LlmClient.Message("assistant", content))
-                        messages.add(LlmClient.Message("user", results.toString()))
+
+                        // Check for mid-task user feedback
+                        val feedback = pendingFeedback
+                        if (feedback != null) {
+                            pendingFeedback = null
+                            messages.add(LlmClient.Message("user", "$results\n\n[USER FEEDBACK (respond to this!)]: $feedback"))
+                        } else {
+                            messages.add(LlmClient.Message("user", results.toString()))
+                        }
                         continue
                     } catch (e: Exception) {
                         ServiceState.addLog("Agent: tool parse error (OpenAI) — ${e.message?.take(80)}")
@@ -224,6 +260,36 @@ class AgentLoop(private val llmClient: LlmClient) {
             return fallback
         } finally {
             _isThinking.value = false
+        }
+    }
+
+    /**
+     * Generate a brief human-readable narration of what the tool did.
+     * Sent to user via liveNarration StateFlow and displayed in chat/Telegram.
+     */
+    private fun narrate(toolName: String, result: String): String {
+        val r = result.take(150)
+        return when {
+            toolName.contains("open_app") -> "Opening app..."
+            toolName.contains("read_screen") -> "Reading screen..."
+            toolName.contains("find_element") -> {
+                if (r.contains("matches\":0")) "Element not found — trying another approach"
+                else "Found element on screen"
+            }
+            toolName.contains("tap") -> "Tapped on screen"
+            toolName.contains("type_text") -> "Typing text..."
+            toolName.contains("press_enter") -> "Pressing Enter/Search"
+            toolName.contains("press_back") -> "Going back"
+            toolName.contains("swipe") -> "Scrolling..."
+            toolName.contains("screenshot") -> "Taking screenshot..."
+            toolName.contains("media_control") -> "Media: ${result.substringAfter("action\":\"").substringBefore("\"")}"
+            toolName.contains("web_search") -> "Searching the web..."
+            toolName.contains("web_scrape") -> "Reading web page..."
+            toolName.contains("memory_store") -> "Saving to memory..."
+            toolName.contains("memory_search") -> "Searching memories..."
+            toolName.contains("telegram") -> "Sending to Telegram..."
+            toolName.contains("write_file") || toolName.contains("generate") -> "Creating file..."
+            else -> "Working: $toolName"
         }
     }
 

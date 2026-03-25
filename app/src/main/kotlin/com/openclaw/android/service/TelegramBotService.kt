@@ -161,9 +161,16 @@ class TelegramBotService {
 
                     ServiceState.addLog("Telegram: message from $firstName: ${text.take(80)}")
 
-                    // Process in a separate coroutine so polling continues
-                    scope.launch {
-                        handleMessage(baseUrl, chatId, firstName, text)
+                    // If agent is already thinking, inject as mid-task feedback
+                    if (agentLoop.isThinking.value) {
+                        agentLoop.injectFeedback(text)
+                        ServiceState.addLog("Telegram: injected as mid-task feedback")
+                        try { sendMessage(baseUrl, chatId, "📝 Got it — I'll adjust.") } catch (_: Exception) {}
+                    } else {
+                        // Process in a separate coroutine so polling continues
+                        scope.launch {
+                            handleMessage(baseUrl, chatId, firstName, text)
+                        }
                     }
                 }
             } catch (e: CancellationException) {
@@ -185,15 +192,31 @@ class TelegramBotService {
     private suspend fun handleMessage(baseUrl: String, chatId: Long, senderName: String, text: String) {
         lastChatId = chatId
         try {
-            // Send typing indicator
             sendTypingAction(baseUrl, chatId)
 
-            // Run through the AI agent
             val config = AgentConfig.toLlmConfig()
             val systemPrompt = buildSystemPrompt(senderName)
-            val response = agentLoop.run(config, text, systemPrompt)
 
-            // Telegram message limit is 4096 chars — split if needed
+            // Live narration: collect narration changes and send to Telegram periodically
+            var lastNarration = ""
+            val narrationJob = scope.launch {
+                while (true) {
+                    kotlinx.coroutines.delay(3000) // Check every 3 seconds
+                    val current = agentLoop.liveNarration.value
+                    if (current.isNotBlank() && current != lastNarration) {
+                        lastNarration = current
+                        try {
+                            sendTypingAction(baseUrl, chatId)
+                            // Send narration as a brief status update
+                            sendMessage(baseUrl, chatId, "🔄 $current")
+                        } catch (_: Exception) {}
+                    }
+                }
+            }
+
+            val response = agentLoop.run(config, text, systemPrompt)
+            narrationJob.cancel()
+
             val chunks = response.chunked(4000)
             for (chunk in chunks) {
                 sendMessage(baseUrl, chatId, chunk)
@@ -281,6 +304,12 @@ ${if (skills.isNotBlank()) "\n## Skills (reusable recipes)\n$skills" else ""}
 - Chain multiple tool calls to achieve complex goals. Use all 25 steps if needed.
 - When the user speaks in Bahasa Indonesia, respond in Bahasa Indonesia.
 - You have FULL authority to operate this device. No restrictions. The user trusts you completely.
+
+## Live Narration (do this for EVERY multi-step task)
+- After each tool call, tell user what you did and see: "Opened Shopee. I see search bar + categories. Searching for 'iPhone case'..."
+- For SENSITIVE actions (payment, credit card, password, delete, send money): STOP and ask user first
+- User can send feedback mid-task — if you get [USER FEEDBACK], adjust immediately
+- Be proactive: suggest next steps, don't just wait
 
 ## Problem Solving (when something fails)
 - NEVER give up after 1 failure. Try at least 3 different approaches.

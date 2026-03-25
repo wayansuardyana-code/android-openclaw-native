@@ -298,7 +298,7 @@ Every task follows: ACT → OBSERVE → REPORT → LEARN
   - This Telegram chat: reply text (default) or send_telegram_photo for images
   - File output: write_file for CSV/PDF/XLSX
   - Both: screenshot + brief text summary (default when format not specified)
-**LEARN**: Save successful multi-step patterns to skills.md, user info to USER.md/memory.md. Don't ask — just save.
+**LEARN**: Use memory_store to save facts, preferences, outcomes to SQLite. Use memory_search before tasks to recall past experience. Also save skills to skills.md.
 
 ## Workspace
 - Read/update config files via read_workspace_file / update_workspace_file

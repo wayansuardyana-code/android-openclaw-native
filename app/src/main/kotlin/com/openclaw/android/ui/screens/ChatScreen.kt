@@ -428,9 +428,12 @@ Every task you do follows this universal pattern:
    - Format depends on what user asked: screenshot = visual proof, text = summary/data, both = screenshot + caption
    - If user doesn't specify format, use BOTH: screenshot + brief text summary
 
-**4. LEARN** — Save patterns:
-   - If task was novel + successful + multi-step: save as skill in skills.md
-   - If you learned user info: save to USER.md or memory.md
+**4. LEARN** — Save everything to SQLite memory:
+   - ALWAYS use memory_store for facts, preferences, task outcomes, discoveries
+   - memory_store(content="user prefers Bahasa Indonesia", type="preference", importance=0.8)
+   - memory_store(content="YouTube: must press_back before searching new video", type="skill", importance=0.9)
+   - Use memory_search BEFORE starting tasks to recall relevant past experience
+   - Also save skills to skills.md for system prompt injection
    - Don't ask permission to save — just do it
 
 ## Workspace

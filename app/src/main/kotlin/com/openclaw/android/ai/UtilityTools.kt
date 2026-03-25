@@ -176,6 +176,33 @@ object UtilityTools {
             )
         ),
         ToolDef(
+            name = "memory_store",
+            description = "Store a fact/memory in the SQLite database for persistent recall. Better than text files — supports search, importance ranking, and type categorization. Use for: learned user preferences, important dates, task outcomes, discovered patterns.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "content" to mapOf("type" to "string", "description" to "The memory/fact to store"),
+                    "type" to mapOf("type" to "string", "description" to "Category: general, skill, fact, conversation, preference",
+                        "enum" to listOf("general", "skill", "fact", "conversation", "preference")),
+                    "importance" to mapOf("type" to "number", "description" to "0.0-1.0, how important this memory is (default 0.5)")
+                ),
+                "required" to listOf("content")
+            )
+        ),
+        ToolDef(
+            name = "memory_search",
+            description = "Search stored memories by keyword. Returns matching memories sorted by importance. Use to recall: user preferences, past task outcomes, learned facts, skills.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "query" to mapOf("type" to "string", "description" to "Search keyword or phrase"),
+                    "type" to mapOf("type" to "string", "description" to "Optional: filter by type (general, skill, fact, conversation, preference)"),
+                    "limit" to mapOf("type" to "number", "description" to "Max results (default 10)")
+                ),
+                "required" to listOf("query")
+            )
+        ),
+        ToolDef(
             name = "generate_xlsx",
             description = "Generate an Excel (.xlsx) file. Supports MULTIPLE SHEETS. For single sheet: use headers+rows. For multi-sheet: use 'sheets' array. Saved to Documents/OpenClaw/.",
             inputSchema = mapOf(
@@ -249,6 +276,43 @@ object UtilityTools {
         return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         try {
             when (name) {
+                "memory_store" -> {
+                    val content = args.get("content").asString
+                    val type = args.get("type")?.asString ?: "general"
+                    val importance = args.get("importance")?.asFloat ?: 0.5f
+                    val db = com.openclaw.android.data.AppDatabase.getInstance(OpenClawApplication.instance)
+                    val entity = com.openclaw.android.data.entity.MemoryEntity(
+                        content = content, type = type, importance = importance, source = "agent"
+                    )
+                    val id = db.memoryDao().insert(entity)
+                    ServiceState.addLog("Memory stored: id=$id type=$type")
+                    """{"success":true,"id":$id,"type":"$type","importance":$importance}"""
+                }
+                "memory_search" -> {
+                    val query = args.get("query").asString.lowercase()
+                    val type = args.get("type")?.asString
+                    val limit = args.get("limit")?.asInt ?: 10
+                    val db = com.openclaw.android.data.AppDatabase.getInstance(OpenClawApplication.instance)
+                    val all = db.memoryDao().getTopMemories(500)
+
+                    // Fuzzy search: score by word overlap (not exact keyword match)
+                    val queryWords = query.split(Regex("[\\s,.:;!?]+")).filter { it.length > 2 }.toSet()
+                    val scored = all.mapNotNull { mem ->
+                        if (type != null && mem.type != type) return@mapNotNull null
+                        val memWords = mem.content.lowercase().split(Regex("[\\s,.:;!?]+")).filter { it.length > 2 }.toSet()
+                        // Score = word overlap + exact substring bonus + importance weight
+                        val overlap = queryWords.count { qw -> memWords.any { it.contains(qw) || qw.contains(it) } }
+                        val exactBonus = if (mem.content.lowercase().contains(query)) 3f else 0f
+                        val score = (overlap.toFloat() / queryWords.size.coerceAtLeast(1)) + exactBonus + (mem.importance * 0.5f)
+                        if (score > 0.1f) mem to score else null
+                    }.sortedByDescending { it.second }.take(limit)
+
+                    scored.forEach { (mem, _) -> db.memoryDao().recordAccess(mem.id) }
+                    val results = scored.map { (mem, score) ->
+                        """{"id":${mem.id},"content":${Gson().toJson(mem.content.take(200))},"type":"${mem.type}","score":${"%.2f".format(score)},"created":"${java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date(mem.createdAt))}"}"""
+                    }
+                    """{"matches":${scored.size},"memories":[${results.joinToString(",")}]}"""
+                }
                 "run_shell_command" -> runShell(args.get("command").asString)
                 "web_scrape" -> webScrape(args.get("url").asString, args.get("selector")?.asString)
                 "web_search" -> webSearch(args.get("query").asString)

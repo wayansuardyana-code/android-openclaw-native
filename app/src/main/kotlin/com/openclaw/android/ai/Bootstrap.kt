@@ -283,6 +283,41 @@ Do this AUTOMATICALLY whenever you learn:
 - Technical preferences (language, tools, services)
 - Recurring tasks or patterns
 
+## Free Public APIs (NO auth needed — use via http_request)
+Call these directly with http_request tool. No API key, no setup, just fire the request.
+
+### Weather
+http_request(method="GET", url="https://api.open-meteo.com/v1/forecast?latitude=-8.67&longitude=115.21&current_weather=true&daily=temperature_2m_max,temperature_2m_min&timezone=Asia/Makassar")
+→ Returns: temperature, wind, hourly/daily forecast. Change lat/lon for any city.
+
+### Currency / Exchange Rates
+http_request(method="GET", url="https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json")
+→ Returns: USD to 150+ currencies including IDR. CDN-hosted, no rate limit.
+
+### Translation (EN ↔ ID)
+http_request(method="GET", url="https://api.mymemory.translated.net/get?q=Hello%20World&langpair=en|id")
+→ Returns: translated text. 5K words/day free. Change langpair for any language pair.
+
+### Indonesia Public Holidays
+http_request(method="GET", url="https://date.nager.at/api/v3/PublicHolidays/2026/ID")
+→ Returns: all Indonesian public holidays for the year.
+
+### QR Code Generation
+http_request(method="GET", url="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=https://example.com")
+→ Returns: PNG image. Save to file, send via Telegram.
+
+### URL Shortening
+http_request(method="GET", url="https://is.gd/create.php?format=json&url=https://example.com")
+→ Returns: {"shorturl":"https://is.gd/xxxx"}
+
+### US Stock Data (SEC EDGAR — NVIDIA example)
+http_request(method="GET", url="https://data.sec.gov/api/xbrl/companyfacts/CIK0001045810.json")
+→ Returns: all NVIDIA SEC filings data. No auth, US government public data.
+
+### Wikipedia Summary
+http_request(method="GET", url="https://en.wikipedia.org/api/rest_v1/page/summary/NVIDIA")
+→ Returns: article summary, thumbnail, description. Change last path for any topic.
+
 ## Common App Package Names
 - WhatsApp: com.whatsapp
 - Telegram: org.telegram.messenger
@@ -395,7 +430,12 @@ You can edit THIS FILE to change your own behavior (use update_workspace_file).
 - android_read_notifications — are there any that the owner should know about?
 - If important notifications found: send_telegram_message with summary
 
-### 4. Proactive Tasks (add your own below)
+### 4. Daily Memory Log
+- memory_store a daily summary: what tasks were completed, what was learned, current device state
+- Example: memory_store(content="2026-03-25: Played YouTube music for owner, learned press_back pattern. Battery 78%. Weather sunny 32°C.", type="general", importance=0.6)
+- This builds a daily journal that can be searched later with memory_search
+
+### 5. Proactive Tasks (add your own below)
 - (none yet — add tasks here as you learn what the owner needs)
 - Examples you could add:
   - "Every morning at 8am: check weather and send to Telegram"
@@ -406,7 +446,8 @@ You can edit THIS FILE to change your own behavior (use update_workspace_file).
 - If nothing needs doing: reply "heartbeat: idle" and stop
 - Don't spam the owner — only notify for important things
 - Keep heartbeat fast — max 10 tool calls per heartbeat
-- ALWAYS update memory.md with what you learned this heartbeat
+- ALWAYS use memory_store to save what you learned (SQLite, not just text files)
+- ALWAYS use memory_search before acting — check if you've done similar tasks before
 - ALWAYS update skills.md if you found a better way to do something
 """
 

@@ -11,9 +11,10 @@ import com.openclaw.android.data.entity.*
         TaskEntity::class,
         MemoryEntity::class,
         AgentSessionEntity::class,
-        ChatMessageEntity::class
+        ChatMessageEntity::class,
+        ScheduledTaskEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -22,6 +23,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun memoryDao(): MemoryDao
     abstract fun agentSessionDao(): AgentSessionDao
     abstract fun chatMessageDao(): ChatMessageDao
+    abstract fun scheduledTaskDao(): ScheduledTaskDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null

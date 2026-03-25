@@ -317,6 +317,62 @@ object UtilityTools {
                 "required" to listOf("file_path")
             )
         ),
+        ToolDef(
+            name = "send_discord_message",
+            description = "Send a message to Discord via webhook URL or bot token + channel ID. Use webhook for simple posting, bot token for richer features.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "text" to mapOf("type" to "string", "description" to "Message text to send"),
+                    "webhook_url" to mapOf("type" to "string", "description" to "Discord webhook URL (optional if bot token configured)"),
+                    "channel_id" to mapOf("type" to "string", "description" to "Discord channel ID (required if using bot token)")
+                ),
+                "required" to listOf("text")
+            )
+        ),
+        ToolDef(
+            name = "send_slack_message",
+            description = "Send a message to Slack via webhook URL or bot token + channel. Use webhook for simple posting, bot token (xoxb-) for richer features.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "text" to mapOf("type" to "string", "description" to "Message text to send"),
+                    "webhook_url" to mapOf("type" to "string", "description" to "Slack webhook URL (optional if bot token configured)"),
+                    "channel" to mapOf("type" to "string", "description" to "Slack channel name or ID (required if using bot token)")
+                ),
+                "required" to listOf("text")
+            )
+        ),
+        ToolDef(
+            name = "schedule_task",
+            description = "Schedule a recurring task. Agent will automatically execute it at the specified time/interval.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "prompt" to mapOf("type" to "string", "description" to "What to do (e.g., 'check weather in Bali and send to Telegram')"),
+                    "interval_minutes" to mapOf("type" to "number", "description" to "Run every N minutes (e.g., 60 for hourly, 1440 for daily)"),
+                    "hour" to mapOf("type" to "number", "description" to "Run at specific hour (0-23, e.g., 8 for 8am). Combines with interval for daily tasks."),
+                    "gateway" to mapOf("type" to "string", "description" to "Where to send results: chat, telegram, group (default: telegram)")
+                ),
+                "required" to listOf("prompt")
+            )
+        ),
+        ToolDef(
+            name = "list_scheduled_tasks",
+            description = "List all scheduled tasks with their next run time and status.",
+            inputSchema = mapOf("type" to "object", "properties" to mapOf<String, Any>())
+        ),
+        ToolDef(
+            name = "cancel_scheduled_task",
+            description = "Cancel a scheduled task by its ID.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "id" to mapOf("type" to "number", "description" to "Task ID to cancel")
+                ),
+                "required" to listOf("id")
+            )
+        ),
     )
 
     suspend fun executeTool(name: String, args: JsonObject): String {
@@ -515,6 +571,126 @@ object UtilityTools {
                         """{"error":"Failed to send document: ${e.message?.replace("\"", "'")}"}"""
                     }
                 }
+                "send_discord_message" -> {
+                    val text = args.get("text").asString
+                    val webhookUrl = args.get("webhook_url")?.asString
+                    val channelId = args.get("channel_id")?.asString
+
+                    try {
+                        if (!webhookUrl.isNullOrBlank()) {
+                            // Webhook mode — simple POST
+                            val body = JsonObject().apply { addProperty("content", text) }
+                            val resp = sharedHttpClient.post(webhookUrl) {
+                                contentType(ContentType.Application.Json)
+                                setBody(body.toString())
+                            }
+                            """{"success":true,"method":"webhook","status":${resp.status.value}}"""
+                        } else {
+                            // Bot token mode
+                            val token = AgentConfig.getKeyForProvider("discord")
+                            if (token.isBlank()) return@withContext """{"error":"Discord bot token not configured and no webhook_url provided"}"""
+                            if (channelId.isNullOrBlank()) return@withContext """{"error":"channel_id required when using bot token"}"""
+
+                            val body = JsonObject().apply { addProperty("content", text) }
+                            val resp = sharedHttpClient.post("https://discord.com/api/v10/channels/$channelId/messages") {
+                                header("Authorization", "Bot $token")
+                                contentType(ContentType.Application.Json)
+                                setBody(body.toString())
+                            }
+                            val respText = resp.bodyAsText()
+                            """{"success":true,"method":"bot","status":${resp.status.value},"response":${respText.take(200)}}"""
+                        }
+                    } catch (e: Exception) {
+                        """{"error":"Discord send failed: ${e.message?.take(100)}"}"""
+                    }
+                }
+                "send_slack_message" -> {
+                    val text = args.get("text").asString
+                    val webhookUrl = args.get("webhook_url")?.asString
+                    val channel = args.get("channel")?.asString
+
+                    try {
+                        if (!webhookUrl.isNullOrBlank()) {
+                            // Webhook mode
+                            val body = JsonObject().apply { addProperty("text", text) }
+                            val resp = sharedHttpClient.post(webhookUrl) {
+                                contentType(ContentType.Application.Json)
+                                setBody(body.toString())
+                            }
+                            """{"success":true,"method":"webhook","status":${resp.status.value}}"""
+                        } else {
+                            // Bot token mode
+                            val token = AgentConfig.getKeyForProvider("slack")
+                            if (token.isBlank()) return@withContext """{"error":"Slack bot token not configured and no webhook_url provided"}"""
+                            if (channel.isNullOrBlank()) return@withContext """{"error":"channel required when using bot token"}"""
+
+                            val body = JsonObject().apply {
+                                addProperty("channel", channel)
+                                addProperty("text", text)
+                            }
+                            val resp = sharedHttpClient.post("https://slack.com/api/chat.postMessage") {
+                                header("Authorization", "Bearer $token")
+                                contentType(ContentType.Application.Json)
+                                setBody(body.toString())
+                            }
+                            val respText = resp.bodyAsText()
+                            """{"success":true,"method":"bot","status":${resp.status.value},"response":${respText.take(200)}}"""
+                        }
+                    } catch (e: Exception) {
+                        """{"error":"Slack send failed: ${e.message?.take(100)}"}"""
+                    }
+                }
+                "schedule_task" -> {
+                    val prompt = args.get("prompt").asString
+                    val intervalMinutes = args.get("interval_minutes")?.asInt ?: 1440 // default daily
+                    val hour = args.get("hour")?.asInt
+                    val gateway = args.get("gateway")?.asString ?: "telegram"
+
+                    val db = com.openclaw.android.data.AppDatabase.getInstance(OpenClawApplication.instance)
+
+                    // Calculate next run time
+                    val now = System.currentTimeMillis()
+                    val nextRun = if (hour != null) {
+                        // Schedule for specific hour today or tomorrow
+                        val cal = java.util.Calendar.getInstance()
+                        cal.set(java.util.Calendar.HOUR_OF_DAY, hour)
+                        cal.set(java.util.Calendar.MINUTE, 0)
+                        cal.set(java.util.Calendar.SECOND, 0)
+                        if (cal.timeInMillis <= now) cal.add(java.util.Calendar.DAY_OF_MONTH, 1)
+                        cal.timeInMillis
+                    } else {
+                        now + (intervalMinutes * 60 * 1000L)
+                    }
+
+                    val task = com.openclaw.android.data.entity.ScheduledTaskEntity(
+                        prompt = prompt,
+                        intervalMinutes = intervalMinutes,
+                        nextRunAt = nextRun,
+                        gateway = gateway
+                    )
+                    val id = db.scheduledTaskDao().insert(task)
+
+                    val nextRunStr = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date(nextRun))
+                    """{"success":true,"id":$id,"prompt":${Gson().toJson(prompt.take(80))},"next_run":"$nextRunStr","interval_minutes":$intervalMinutes,"gateway":"$gateway"}"""
+                }
+
+                "list_scheduled_tasks" -> {
+                    val db = com.openclaw.android.data.AppDatabase.getInstance(OpenClawApplication.instance)
+                    val tasks = db.scheduledTaskDao().getAll()
+                    val sdf = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US)
+                    val list = tasks.map { t ->
+                        """{"id":${t.id},"prompt":${Gson().toJson(t.prompt.take(60))},"enabled":${t.isEnabled},"interval_min":${t.intervalMinutes},"next_run":"${sdf.format(java.util.Date(t.nextRunAt))}","runs":${t.runCount}}"""
+                    }
+                    """{"count":${tasks.size},"tasks":[${list.joinToString(",")}]}"""
+                }
+
+                "cancel_scheduled_task" -> {
+                    val id = args.get("id").asLong
+                    val db = com.openclaw.android.data.AppDatabase.getInstance(OpenClawApplication.instance)
+                    db.scheduledTaskDao().deleteById(id)
+                    """{"success":true,"deleted_id":$id}"""
+                }
+
                 else -> """{"error":"Unknown tool: $name"}"""
             }
         } catch (e: Exception) {
@@ -525,9 +701,20 @@ object UtilityTools {
     }
 
     private fun runShell(command: String): String {
-        val blocked = listOf("rm -rf /", "mkfs", "dd if=", ":(){ :|:&", "format")
-        if (blocked.any { command.contains(it) }) {
-            return """{"error":"Command blocked for safety"}"""
+        val blocklist = listOf(
+            "rm -rf /", "rm -r /", "mkfs", "dd if=", ":(){ :|:&", "format",
+            // Block data exfiltration
+            "shared_prefs", "databases/", ".db",
+            // Block network exfiltration
+            "curl ", "wget ", "nc ", "ncat ", "netcat ",
+            // Block dangerous operations
+            "chmod 777", "su ", "mount ", "umount ",
+            // Block package manipulation
+            "pm uninstall", "pm disable", "pm clear"
+        )
+        val lowerCmd = command.lowercase()
+        if (blocklist.any { lowerCmd.contains(it) }) {
+            return """{"error":"Command blocked for security"}"""
         }
 
         val process = ProcessBuilder("sh", "-c", command)
@@ -550,14 +737,13 @@ object UtilityTools {
 
     private fun webScrape(url: String, selector: String?): String {
         val fullUrl = if (url.startsWith("http")) url else "https://$url"
+        if (!isUrlSafe(fullUrl)) return """{"error":"URL blocked: internal/private network addresses not allowed"}"""
         val conn = Jsoup.connect(fullUrl)
             .userAgent("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36")
             .header("Accept", "text/html,application/xhtml+xml")
             .timeout(15000)
             .followRedirects(true)
             .ignoreHttpErrors(true)
-        // Apply SSL trust for devices with outdated certs
-        try { conn.sslSocketFactory(trustAllSsl()) } catch (_: Exception) {}
         val doc = conn.get()
 
         val title = doc.title()
@@ -591,7 +777,6 @@ object UtilityTools {
                     .timeout(10000)
                     .followRedirects(true)
                     .ignoreHttpErrors(true)
-                try { conn.sslSocketFactory(trustAllSsl()) } catch (_: Exception) {}
                 val doc = conn.get()
 
                 // Try DuckDuckGo lite format
@@ -630,16 +815,32 @@ object UtilityTools {
         }
     }
 
-    /** Trust all SSL certs (needed on some Android devices with outdated root certs) */
-    private fun trustAllSsl(): javax.net.ssl.SSLSocketFactory {
-        val trustAll = arrayOf<javax.net.ssl.TrustManager>(object : javax.net.ssl.X509TrustManager {
-            override fun checkClientTrusted(chain: Array<java.security.cert.X509Certificate>?, authType: String?) {}
-            override fun checkServerTrusted(chain: Array<java.security.cert.X509Certificate>?, authType: String?) {}
-            override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = arrayOf()
-        })
-        val ctx = javax.net.ssl.SSLContext.getInstance("TLS")
-        ctx.init(null, trustAll, java.security.SecureRandom())
-        return ctx.socketFactory
+    /** Validate URL is not targeting internal/private networks (SSRF protection) */
+    private fun isUrlSafe(url: String): Boolean {
+        try {
+            val parsed = java.net.URL(url)
+            val host = parsed.host.lowercase()
+            // Block private/internal networks
+            if (host == "localhost" || host == "127.0.0.1" || host == "0.0.0.0") return false
+            if (host.startsWith("10.")) return false
+            if (host.startsWith("192.168.")) return false
+            if (host.startsWith("172.") && host.split(".").getOrNull(1)?.toIntOrNull()?.let { it in 16..31 } == true) return false
+            if (host == "169.254.169.254") return false // Cloud metadata
+            if (parsed.protocol == "file") return false
+            return true
+        } catch (_: Exception) { return false }
+    }
+
+    /** Validate file path is not accessing app internal data directories */
+    private fun isPathAllowed(path: String): Boolean {
+        val normalized = java.io.File(path).canonicalPath
+        val blocked = listOf(
+            "/data/data/com.openclaw.android/shared_prefs",
+            "/data/data/com.openclaw.android.debug/shared_prefs",
+            "/data/data/com.openclaw.android/databases",
+            "/data/data/com.openclaw.android.debug/databases"
+        )
+        return blocked.none { normalized.startsWith(it) }
     }
 
     private fun calculate(expression: String): String {
@@ -650,6 +851,7 @@ object UtilityTools {
     }
 
     private fun readFile(path: String): String {
+        if (!isPathAllowed(path)) return """{"error":"Path blocked: cannot access app internal data directories"}"""
         val file = File(path)
         if (!file.exists()) return """{"error":"File not found: $path"}"""
         if (!file.canRead()) return """{"error":"Cannot read file: $path"}"""
@@ -658,6 +860,7 @@ object UtilityTools {
     }
 
     private fun writeFile(path: String, content: String): String {
+        if (!isPathAllowed(path)) return """{"error":"Path blocked: cannot access app internal data directories"}"""
         val file = File(path)
         file.parentFile?.mkdirs()
         file.writeText(content)
@@ -841,6 +1044,7 @@ object UtilityTools {
 
     private fun httpRequest(args: JsonObject): String {
         val url = args.get("url").asString
+        if (!isUrlSafe(url)) return """{"error":"URL blocked: internal/private network addresses not allowed"}"""
         val method = args.get("method")?.asString ?: "GET"
 
         val conn = Jsoup.connect(url)
@@ -936,6 +1140,7 @@ object UtilityTools {
         if (key.isBlank()) return """{"error":"firecrawl API key not configured. Add it in Settings → Services → + → firecrawl"}"""
 
         val url = args.get("url").asString
+        if (!isUrlSafe(url)) return """{"error":"URL blocked: internal/private network addresses not allowed"}"""
         val gson = Gson()
 
         return try {

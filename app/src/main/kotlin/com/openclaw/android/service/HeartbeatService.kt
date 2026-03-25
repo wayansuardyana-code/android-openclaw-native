@@ -73,8 +73,13 @@ class HeartbeatService {
     fun isActive(): Boolean = isRunning
 
     /**
-     * Single heartbeat tick. Reads HEARTBEAT.md, evaluates conditions,
-     * executes tasks if needed.
+     * Single heartbeat tick. Runs scheduled tasks first, then autonomous HEARTBEAT.md program.
+     *
+     * Proactive behavior rules:
+     * - ALWAYS check scheduled tasks (these are user-requested, always execute)
+     * - Run HEARTBEAT.md program (self-improvement, notifications, daily log)
+     * - NEVER spam user — only notify for: scheduled task results, important notifications, failures
+     * - Silent on idle — no notification if nothing meaningful happened
      */
     private suspend fun tick() {
         if (isExecuting) {
@@ -89,40 +94,56 @@ class HeartbeatService {
         isExecuting = true
         lastHeartbeat = System.currentTimeMillis()
         val now = SimpleDateFormat("HH:mm", Locale.US).format(Date())
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
         ServiceState.addLog("Heartbeat: tick at $now")
 
         try {
-            // Read HEARTBEAT.md for instructions
+            // ── Phase 1: Execute due scheduled tasks (user-requested, always run) ──
+            runScheduledTasks(config)
+
+            // ── Phase 2: Autonomous program (HEARTBEAT.md) ──
+            // Skip overnight (23:00-06:00) unless there are pending tasks
+            if (hour in 23..23 || hour in 0..5) {
+                ServiceState.addLog("Heartbeat: overnight — skipping autonomous program")
+                return
+            }
+
             val heartbeat = Bootstrap.readFile("HEARTBEAT.md")
             val memory = Bootstrap.readFile("memory.md")
             val user = Bootstrap.readFile("USER.md")
             val skills = Bootstrap.readFile("skills.md")
             val soul = Bootstrap.readFile("SOUL.md")
 
-            // Build the autonomous prompt
             val systemPrompt = buildString {
                 append(soul)
                 append("\n\n## Heartbeat Mode (AUTONOMOUS — no user message)")
                 append("\nYou are running autonomously on a timer. No human sent you a message.")
                 append("\nYou have the same tools as always. Current time: $now")
+                append("\n\n## ANTI-SPAM RULES (CRITICAL)")
+                append("\n- Do NOT send_telegram_message unless you found something genuinely important")
+                append("\n- 'Important' means: urgent notification, scheduled task result, or critical failure")
+                append("\n- Self-improvement (updating skills, reviewing failures) is SILENT — do it without notifying")
+                append("\n- If nothing needs doing: reply 'heartbeat: idle' and stop immediately")
+                append("\n- Do NOT make up tasks. Only act on: HEARTBEAT instructions, scheduled tasks, or real notifications")
                 append("\n\nRead the HEARTBEAT instructions below and execute any applicable tasks.")
-                append("\nDo NOT send messages to the user unless the heartbeat instructions say to.")
-                append("\nIf nothing needs doing, just reply 'heartbeat: idle' and stop.")
                 append("\n\n--- HEARTBEAT INSTRUCTIONS ---\n$heartbeat")
-                if (memory.isNotBlank()) append("\n\n--- MEMORY ---\n$memory")
+                if (memory.isNotBlank()) append("\n\n--- MEMORY (recent) ---\n${memory.takeLast(1000)}")
                 if (user.isNotBlank()) append("\n\n--- USER PROFILE ---\n$user")
-                if (skills.isNotBlank()) append("\n\n--- SKILLS ---\n$skills")
+                if (skills.isNotBlank()) append("\n\n--- SKILLS ---\n${skills.takeLast(500)}")
             }
 
-            // Run the agent
             val result = agentLoop.run(config, "[HEARTBEAT TICK — $now]", systemPrompt)
 
-            // Log the result
             val resultSummary = result.take(200).replace("\n", " ")
             ServiceState.addLog("Heartbeat: result — $resultSummary")
 
-            // If agent did something meaningful (not just "idle"), notify
-            if (!result.contains("idle", ignoreCase = true) && result.length > 20) {
+            // Only notify if agent actually DID something meaningful (not idle/self-improvement)
+            val shouldNotify = !result.contains("idle", ignoreCase = true) &&
+                !result.contains("self-improvement", ignoreCase = true) &&
+                !result.contains("updated skills", ignoreCase = true) &&
+                !result.contains("no action needed", ignoreCase = true) &&
+                result.length > 50
+            if (shouldNotify) {
                 NotificationHelper.notifyAgentResponse("Nate (auto)", result.take(200))
             }
 
@@ -130,6 +151,41 @@ class HeartbeatService {
             ServiceState.addLog("Heartbeat: execution error — ${e.message?.take(80)}")
         } finally {
             isExecuting = false
+        }
+    }
+
+    /**
+     * Check and execute due scheduled tasks from Room DB.
+     * These are user-requested recurring tasks — always execute and notify.
+     */
+    private suspend fun runScheduledTasks(config: LlmClient.Config) {
+        try {
+            val db = com.openclaw.android.data.AppDatabase.getInstance(
+                com.openclaw.android.OpenClawApplication.instance
+            )
+            val dueTasks = db.scheduledTaskDao().getDueTasks()
+            if (dueTasks.isEmpty()) return
+
+            ServiceState.addLog("Heartbeat: ${dueTasks.size} scheduled task(s) due")
+            for (task in dueTasks) {
+                ServiceState.addLog("Heartbeat: executing task #${task.id}: ${task.prompt.take(40)}")
+                try {
+                    val taskPrompt = "You are executing a scheduled task. Do this and send results to ${task.gateway}. Be concise.\n\nTask: ${task.prompt}"
+                    val result = agentLoop.run(config, task.prompt, taskPrompt)
+                    ServiceState.addLog("Heartbeat: task #${task.id} done: ${result.take(80)}")
+                } catch (e: Exception) {
+                    ServiceState.addLog("Heartbeat: task #${task.id} failed: ${e.message?.take(60)}")
+                }
+                // Update: increment runCount, set nextRunAt
+                val nextRun = System.currentTimeMillis() + (task.intervalMinutes * 60 * 1000L)
+                db.scheduledTaskDao().update(task.copy(
+                    lastRunAt = System.currentTimeMillis(),
+                    nextRunAt = nextRun,
+                    runCount = task.runCount + 1
+                ))
+            }
+        } catch (e: Exception) {
+            ServiceState.addLog("Heartbeat: scheduled tasks error: ${e.message?.take(60)}")
         }
     }
 

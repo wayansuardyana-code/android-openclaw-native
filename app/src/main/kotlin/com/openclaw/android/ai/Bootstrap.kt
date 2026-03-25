@@ -147,7 +147,7 @@ Examples of when to delegate:
 ## Agent: OpenClaw Android
 - **Type**: Primary autonomous agent
 - **Model**: Configured in Settings
-- **Tools**: 52 tools (18 device + 22 utility + 7 service + 3 Python + 2 vision/doc)
+- **Tools**: 54 tools (18 device + 24 utility + 7 service + 3 Python + 2 vision/doc)
 - **Sub-agents**: Can spawn background agents for parallel tasks
 
 ## Workspace Layout
@@ -347,6 +347,10 @@ Save response to file → send_telegram_photo
 
 ### WHEN you need to shorten a URL:
 http_request(method="GET", url="https://is.gd/create.php?format=json&url=LONG_URL")
+
+## Messaging Gateways
+- send_discord_message: WHEN user asks to send to Discord → use webhook or bot token
+- send_slack_message: WHEN user asks to send to Slack → use webhook or bot token
 
 ## Common App Package Names
 - WhatsApp: com.whatsapp

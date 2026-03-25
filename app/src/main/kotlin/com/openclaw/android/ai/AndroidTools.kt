@@ -1,5 +1,13 @@
 package com.openclaw.android.ai
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Rect
+import android.graphics.Typeface
+import android.view.accessibility.AccessibilityNodeInfo
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.openclaw.android.service.NotificationReaderService
@@ -12,6 +20,8 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
+import java.io.File
+import java.io.FileOutputStream
 import kotlin.coroutines.resume
 
 /**
@@ -21,6 +31,10 @@ import kotlin.coroutines.resume
 object AndroidTools {
 
     private val gson = Gson()
+
+    /** Last SoM analysis results, used by tap_som_element */
+    @Volatile
+    private var lastSomElements: List<SomElement> = emptyList()
 
     fun getToolDefinitions(): List<ToolDef> = getAndroidTools() + UtilityTools.getToolDefinitions() + ServiceTools.getToolDefinitions() + PythonRuntime.getToolDefinitions()
 
@@ -163,6 +177,27 @@ object AndroidTools {
             name = "take_screenshot",
             description = "Take a screenshot of the current screen and save it as a PNG file. Returns the file path. Requires Android 11+ (API 30) and Accessibility Service enabled. Use with send_telegram_photo to send screenshots to the user.",
             inputSchema = mapOf("type" to "object", "properties" to emptyMap<String, Any>())
+        ),
+        ToolDef(
+            name = "analyze_screen_with_som",
+            description = "Take a screenshot with numbered labels on every interactive element (Set-of-Mark). Returns the annotated image path and a mapping of numbers to elements. Agent can then say 'tap_som_element(id=3)' to tap element 3. Better than read_screen for visual UI navigation.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "send_to_vision" to mapOf("type" to "boolean", "description" to "Also send to Gemini Vision for description (default false)")
+                )
+            )
+        ),
+        ToolDef(
+            name = "tap_som_element",
+            description = "Tap an element by its SoM number from analyze_screen_with_som. Example: tap_som_element(id=3) taps element #3.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "id" to mapOf("type" to "number", "description" to "Element number from SoM overlay")
+                ),
+                "required" to listOf("id")
+            )
         ),
         ToolDef(
             name = "android_long_press",
@@ -457,6 +492,82 @@ object AndroidTools {
 
                     reader.captureScreenshot(file.absolutePath)
                 }
+                "analyze_screen_with_som" -> {
+                    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {
+                        return """{"error":"Screenshot requires Android 11+"}"""
+                    }
+                    val service = ScreenReaderService.instance
+                        ?: return """{"error":"Accessibility service not running"}"""
+
+                    // Step 1: Take screenshot to temp file
+                    val context = com.openclaw.android.OpenClawApplication.instance
+                    val dir = File(context.filesDir, "screenshots")
+                    dir.mkdirs()
+                    val tempFile = File(dir, "som_temp_${System.currentTimeMillis()}.png")
+                    val ssResult = service.captureScreenshot(tempFile.absolutePath)
+
+                    if (!tempFile.exists() || tempFile.length() == 0L) {
+                        return """{"error":"Screenshot failed: $ssResult"}"""
+                    }
+
+                    // Step 2: Load screenshot as mutable Bitmap
+                    val screenshot = BitmapFactory.decodeFile(tempFile.absolutePath)
+                        ?: return """{"error":"Failed to decode screenshot bitmap"}"""
+
+                    // Step 3: Collect interactive elements from accessibility tree
+                    val rootNode = service.rootInActiveWindow
+                        ?: return """{"error":"No active window"}"""
+                    val dm = context.resources.displayMetrics
+                    val screenW = dm.widthPixels
+                    val screenH = dm.heightPixels
+                    val elements = mutableListOf<SomElement>()
+                    collectInteractiveElements(rootNode, elements, screenW, screenH, maxElements = 30)
+                    rootNode.recycle()
+
+                    // Step 4: Draw SoM overlay
+                    val annotated = drawSomOverlay(screenshot, elements)
+                    screenshot.recycle()
+
+                    // Step 5: Save annotated screenshot
+                    val somFile = File(dir, "som_${System.currentTimeMillis()}.png")
+                    FileOutputStream(somFile).use { annotated.compress(Bitmap.CompressFormat.PNG, 90, it) }
+                    annotated.recycle()
+                    tempFile.delete()
+
+                    // Step 6: Store for tap_som_element
+                    lastSomElements = elements.toList()
+
+                    // Step 7: Build result mapping
+                    val mapping = elements.mapIndexed { i, e ->
+                        val id = i + 1
+                        val cx = (e.left + e.right) / 2
+                        val cy = (e.top + e.bottom) / 2
+                        """{"id":$id,"text":${gson.toJson(e.text.take(50))},"type":"${e.className}","bounds":[${e.left},${e.top},${e.right},${e.bottom}],"center":[$cx,$cy],"clickable":${e.isClickable}}"""
+                    }
+
+                    ServiceState.addLog("SoM: annotated ${elements.size} elements")
+                    """{"som_image":"${somFile.absolutePath}","elements_count":${elements.size},"elements":[${mapping.joinToString(",")}]}"""
+                }
+                "tap_som_element" -> {
+                    val id = args.get("id")?.asInt
+                        ?: return """{"error":"Missing 'id' parameter"}"""
+                    val elements = lastSomElements
+                    if (elements.isEmpty()) {
+                        return """{"error":"No SoM data available. Run analyze_screen_with_som first."}"""
+                    }
+                    if (id < 1 || id > elements.size) {
+                        return """{"error":"Invalid element id $id. Valid range: 1-${elements.size}"}"""
+                    }
+                    val element = elements[id - 1]
+                    val cx = (element.left + element.right) / 2f
+                    val cy = (element.top + element.bottom) / 2f
+                    val service = ScreenReaderService.instance
+                        ?: return """{"error":"Accessibility service not running"}"""
+                    val success = suspendCancellableCoroutine<Boolean> { cont ->
+                        service.tap(cx, cy) { result -> cont.resume(result) }
+                    }
+                    """{"success":$success,"id":$id,"text":${gson.toJson(element.text.take(50))},"tapped_at":[${cx.toInt()},${cy.toInt()}]}"""
+                }
                 "android_long_press" -> {
                     val reader = ScreenReaderService.instance
                         ?: return """{"error":"Accessibility service not enabled"}"""
@@ -590,4 +701,112 @@ object AndroidTools {
             """{"error":"${e.message?.replace("\"", "'")}"}"""
         }
     }
+
+    // ── Set-of-Mark (SoM) Helpers ───────────────────────
+
+    /**
+     * Draw numbered circles and bounding boxes on a screenshot for each interactive element.
+     */
+    private fun drawSomOverlay(screenshot: Bitmap, elements: List<SomElement>): Bitmap {
+        val result = screenshot.copy(Bitmap.Config.ARGB_8888, true)
+        val canvas = Canvas(result)
+
+        val circlePaint = Paint().apply {
+            color = Color.RED
+            style = Paint.Style.FILL
+            alpha = 180
+        }
+        val textPaint = Paint().apply {
+            color = Color.WHITE
+            textSize = 28f
+            typeface = Typeface.DEFAULT_BOLD
+            textAlign = Paint.Align.CENTER
+            isAntiAlias = true
+        }
+        val borderPaint = Paint().apply {
+            color = Color.RED
+            style = Paint.Style.STROKE
+            strokeWidth = 2f
+            alpha = 120
+        }
+
+        elements.forEachIndexed { index, element ->
+            val num = index + 1
+            val cx = (element.left + element.right) / 2f
+            val cy = (element.top + element.bottom) / 2f
+
+            // Draw element border rectangle
+            canvas.drawRect(
+                element.left.toFloat(), element.top.toFloat(),
+                element.right.toFloat(), element.bottom.toFloat(), borderPaint
+            )
+
+            // Draw numbered circle at center
+            val radius = if (num < 10) 18f else 22f
+            canvas.drawCircle(cx, cy, radius, circlePaint)
+            canvas.drawText("$num", cx, cy + 9f, textPaint)
+        }
+
+        return result
+    }
+
+    /**
+     * Walk the accessibility tree and collect interactive (clickable, checkable, editable)
+     * elements that are on-screen and have valid bounds. Max [maxElements] to avoid clutter.
+     */
+    private fun collectInteractiveElements(
+        node: AccessibilityNodeInfo,
+        out: MutableList<SomElement>,
+        screenW: Int,
+        screenH: Int,
+        maxElements: Int = 30,
+        depth: Int = 0
+    ) {
+        if (out.size >= maxElements || depth > 15) return
+
+        val rect = Rect()
+        node.getBoundsInScreen(rect)
+
+        val isInteractive = node.isClickable || node.isCheckable || node.isEditable
+        val isVisible = rect.width() > 0 && rect.height() > 0
+        val isOnScreen = rect.bottom > 0 && rect.top < screenH && rect.right > 0 && rect.left < screenW
+
+        if (isInteractive && isVisible && isOnScreen) {
+            val text = node.text?.toString()?.take(80) ?: ""
+            val desc = node.contentDescription?.toString()?.take(80) ?: ""
+            val displayText = text.ifBlank { desc }
+            val cls = node.className?.toString()?.substringAfterLast(".") ?: "View"
+
+            out.add(
+                SomElement(
+                    text = displayText,
+                    className = cls,
+                    left = rect.left.coerceAtLeast(0),
+                    top = rect.top.coerceAtLeast(0),
+                    right = rect.right.coerceAtMost(screenW),
+                    bottom = rect.bottom.coerceAtMost(screenH),
+                    isClickable = node.isClickable
+                )
+            )
+        }
+
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            collectInteractiveElements(child, out, screenW, screenH, maxElements, depth + 1)
+            child.recycle()
+        }
+    }
 }
+
+/**
+ * Represents an interactive UI element for Set-of-Mark overlay.
+ */
+data class SomElement(
+    val text: String,
+    val className: String,
+    val left: Int,
+    val top: Int,
+    val right: Int,
+    val bottom: Int,
+    val isClickable: Boolean
+)

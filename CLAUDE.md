@@ -88,7 +88,7 @@ POST /agent/chat                  # {message, provider, apiKey, model, baseUrl} 
 - POST /agent/chat endpoint accepts {message, provider, apiKey, model, baseUrl}
 - Max 10 tool-calling steps per agent run
 
-## LLM Tools (52 total)
+## LLM Tools (54 total)
 ### Android Device Tools (18)
 android_read_screen, find_element, read_region,
 android_tap, android_long_press, android_swipe, android_type_text,
@@ -99,12 +99,13 @@ android_set_brightness, android_get_clipboard, android_set_clipboard,
 android_wifi_toggle, android_read_notifications,
 take_screenshot, shizuku_command
 
-### Utility Tools (22)
+### Utility Tools (24)
 run_shell_command, web_scrape, web_search, brave_search, exa_search, firecrawl_scrape,
 calculator, read_file, write_file, list_files, generate_csv, generate_xlsx, generate_pdf,
 http_request, spawn_sub_agent, list_sub_agents,
 read_workspace_file, update_workspace_file,
 send_telegram_message, send_telegram_photo, send_telegram_document,
+send_discord_message, send_slack_message,
 analyze_screenshot
 
 ### Service Tools (7) — require API tokens

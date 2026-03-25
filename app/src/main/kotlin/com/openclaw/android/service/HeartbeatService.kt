@@ -86,6 +86,11 @@ class HeartbeatService {
             ServiceState.addLog("Heartbeat: skipped (previous still running)")
             return
         }
+        // Don't run heartbeat if user is actively chatting (prevent context pollution)
+        if (agentLoop.isThinking.value) {
+            ServiceState.addLog("Heartbeat: skipped (agent is busy with user)")
+            return
+        }
 
         // Check if LLM is configured
         val config = try { AgentConfig.toLlmConfig() } catch (_: Exception) { return }

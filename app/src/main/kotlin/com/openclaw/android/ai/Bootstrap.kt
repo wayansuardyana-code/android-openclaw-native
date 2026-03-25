@@ -46,6 +46,14 @@ object Bootstrap {
         writeIfMissing(File(cfg, "skills.md"), SKILLS_MD)
         writeIfMissing(File(cfg, "bootstrap.md"), BOOTSTRAP_MD)
 
+        // Create notes folder for user notes (Obsidian-compatible)
+        val notesDir = File(
+            android.os.Environment.getExternalStoragePublicDirectory(
+                android.os.Environment.DIRECTORY_DOCUMENTS
+            ), "OpenClaw/notes"
+        )
+        notesDir.mkdirs()
+
         ServiceState.addLog("Bootstrap: workspace initialized (${ws.listFiles()?.size ?: 0} + ${cfg.listFiles()?.size ?: 0} files)")
     }
 

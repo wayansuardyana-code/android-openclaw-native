@@ -388,6 +388,35 @@ object UtilityTools {
                 "required" to listOf("service", "action")
             )
         ),
+        ToolDef(
+            name = "create_note",
+            description = "Create a markdown note in the user's notes folder. Notes are viewable in the app and compatible with Obsidian. Use [[wiki-links]] to link between notes.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "title" to mapOf("type" to "string", "description" to "Note title (becomes filename)"),
+                    "content" to mapOf("type" to "string", "description" to "Markdown content. Use [[Note Title]] for wiki-links."),
+                    "folder" to mapOf("type" to "string", "description" to "Subfolder (optional, e.g., 'meetings', 'research')")
+                ),
+                "required" to listOf("title", "content")
+            )
+        ),
+        ToolDef(
+            name = "list_notes",
+            description = "List all notes in the user's notes folder. Returns title, preview, date for each note.",
+            inputSchema = mapOf("type" to "object", "properties" to mapOf<String, Any>())
+        ),
+        ToolDef(
+            name = "read_note",
+            description = "Read the full content of a note by title.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "title" to mapOf("type" to "string", "description" to "Note title to read")
+                ),
+                "required" to listOf("title")
+            )
+        ),
     )
 
     suspend fun executeTool(name: String, args: JsonObject): String {
@@ -740,6 +769,59 @@ object UtilityTools {
                     } catch (e: Exception) {
                         """{"error":"Google API error: ${e.message?.take(200)}"}"""
                     }
+                }
+
+                "create_note" -> {
+                    val title = args.get("title").asString.replace(Regex("[/\\\\:*?\"<>|]"), "_")
+                    val content = args.get("content").asString
+                    val folder = args.get("folder")?.asString ?: ""
+
+                    val notesDir = File(
+                        android.os.Environment.getExternalStoragePublicDirectory(
+                            android.os.Environment.DIRECTORY_DOCUMENTS
+                        ), "OpenClaw/notes" + if (folder.isNotBlank()) "/$folder" else ""
+                    )
+                    notesDir.mkdirs()
+
+                    val file = File(notesDir, "$title.md")
+                    file.writeText(content)
+                    ServiceState.addLog("Note created: ${file.absolutePath}")
+                    """{"success":true,"path":"${file.absolutePath}","title":"$title"}"""
+                }
+
+                "list_notes" -> {
+                    val notesDir = File(
+                        android.os.Environment.getExternalStoragePublicDirectory(
+                            android.os.Environment.DIRECTORY_DOCUMENTS
+                        ), "OpenClaw/notes"
+                    )
+                    if (!notesDir.exists()) return@withContext """{"notes":[],"count":0}"""
+
+                    val notes = notesDir.walkTopDown()
+                        .filter { it.isFile && it.extension == "md" }
+                        .map { file ->
+                            val preview = file.readText().take(100).replace("\n", " ").replace("\"", "\\\"")
+                            val relPath = file.relativeTo(notesDir).path
+                            """{"title":"${file.nameWithoutExtension}","path":"$relPath","preview":"$preview","modified":${file.lastModified()}}"""
+                        }.toList()
+
+                    """{"count":${notes.size},"notes":[${notes.joinToString(",")}]}"""
+                }
+
+                "read_note" -> {
+                    val title = args.get("title").asString
+                    val notesDir = File(
+                        android.os.Environment.getExternalStoragePublicDirectory(
+                            android.os.Environment.DIRECTORY_DOCUMENTS
+                        ), "OpenClaw/notes"
+                    )
+
+                    val file = notesDir.walkTopDown().firstOrNull {
+                        it.isFile && it.nameWithoutExtension.equals(title, ignoreCase = true)
+                    }
+
+                    if (file == null) return@withContext """{"error":"Note '$title' not found"}"""
+                    """{"title":"${file.nameWithoutExtension}","content":${Gson().toJson(file.readText())},"path":"${file.absolutePath}"}"""
                 }
 
                 else -> """{"error":"Unknown tool: $name"}"""

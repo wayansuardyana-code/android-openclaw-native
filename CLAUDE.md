@@ -160,6 +160,11 @@ This pattern ensures tasks are verifiable, results are communicated, and knowled
 - v2.3.0: brave_search, exa_search, firecrawl_scrape tools (52 total tools)
 - v2.3.0: Hierarchical context compaction with fact preservation
 - v2.3.0: Code review fixes — suspend functions (no runBlocking), ID-based dedup, prune counter
+- v2.3.0: Auto-updater — checks GitHub Releases, auto-download APK, install prompt, auto-check every 6h
+- v2.3.0: Telegram group fix — bot only responds on @mention/reply/command, not every message
+- v2.3.0: send_telegram_message supports target='group' and explicit chat_id
+- v2.3.0: GitHub Release created with APK attached (releases/tag/v2.3.0)
+- VPS APK server: python3 -m http.server 8899 in /root/apk-serve/
 - v2.2.0: 52 LLM tools (18 Android device + 22 utility + 7 service + 3 Python + 2 vision/doc)
 - v2.2.0: 15 LLM providers including Kimi/Moonshot, LLM fallback system
 - v2.2.0: analyze_screenshot (Gemini Vision) tool added

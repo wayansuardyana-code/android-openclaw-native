@@ -22,6 +22,10 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openclaw.android.ai.AgentConfig
+import com.openclaw.android.ai.Bootstrap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private val BG = Color(0xFF0D1117)
 private val SURFACE = Color(0xFF161B22)
@@ -158,25 +162,63 @@ fun ConnectorsScreen() {
             }
         }
 
-        // ── ACTIVE SKILLS (all built-in, no config needed) ──
-        item { SectionLabel("ACTIVE SKILLS (${BUILTIN_SKILLS.size})") }
+        // ── SKILLS ──
+        item {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                SectionLabel("SKILLS")
+                Spacer(Modifier.weight(1f))
+                Text("${BUILTIN_SKILLS.size} built-in", color = GREEN, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+            }
+        }
 
-        // Group by category
+        // Built-in skills — grouped by category
+        item {
+            Text("BUILT-IN (default)", color = GREEN.copy(alpha = 0.7f), fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, letterSpacing = 1.sp, modifier = Modifier.padding(top = 4.dp))
+        }
         val categories = BUILTIN_SKILLS.map { it.category }.distinct()
         categories.forEach { cat ->
             val skills = BUILTIN_SKILLS.filter { it.category == cat }
             item {
-                Text(cat.uppercase(), color = CYAN.copy(alpha = 0.6f), fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, letterSpacing = 1.sp, modifier = Modifier.padding(top = 4.dp))
+                Text(cat.uppercase(), color = CYAN.copy(alpha = 0.5f), fontSize = 9.sp, fontFamily = FontFamily.Monospace, letterSpacing = 1.sp, modifier = Modifier.padding(top = 2.dp, start = 8.dp))
             }
             items(skills) { skill ->
-                Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(6.dp).background(GREEN, RoundedCornerShape(3.dp)))
-                        Spacer(Modifier.width(10.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(skill.name, color = TEXT, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-                            Text(skill.desc, color = TEXT2, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-                        }
+                SkillCard(skill.name, skill.desc, "built-in", GREEN)
+            }
+        }
+
+        // Custom skills — loaded from skills.md (agent-learned + user-added)
+        item {
+            val scope = rememberCoroutineScope()
+            var customSkills by remember { mutableStateOf(listOf<Triple<String, String, String>>()) }
+
+            LaunchedEffect(Unit) {
+                withContext(Dispatchers.IO) {
+                    val content = Bootstrap.readFile("skills.md")
+                    val parsed = parseSkillsMd(content)
+                    customSkills = parsed
+                }
+            }
+
+            Column {
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("CUSTOM (learned / imported)", color = ORANGE.copy(alpha = 0.7f), fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, letterSpacing = 1.sp)
+                    Spacer(Modifier.weight(1f))
+                    if (customSkills.isNotEmpty()) {
+                        Text("${customSkills.size} skills", color = ORANGE, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+
+                if (customSkills.isEmpty()) {
+                    Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        Text("No custom skills yet. Agent learns skills automatically after completing 5+ step tasks.",
+                            color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(12.dp))
+                    }
+                } else {
+                    customSkills.forEach { (name, desc, source) ->
+                        SkillCard(name, desc, source, ORANGE)
+                        Spacer(Modifier.height(4.dp))
                     }
                 }
             }
@@ -262,6 +304,56 @@ private fun ConnectedServiceCard(name: String, desc: String, token: String, cont
             }
         }
     }
+}
+
+@Composable
+private fun SkillCard(name: String, desc: String, source: String, dotColor: Color) {
+    Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(6.dp).background(dotColor, RoundedCornerShape(3.dp)))
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(name, color = TEXT, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                Text(desc, color = TEXT2, fontSize = 10.sp, fontFamily = FontFamily.Monospace, maxLines = 2)
+            }
+            Text(source, color = dotColor.copy(alpha = 0.6f), fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+        }
+    }
+}
+
+/** Parse skills.md into list of (name, description, source) */
+private fun parseSkillsMd(content: String): List<Triple<String, String, String>> {
+    val skills = mutableListOf<Triple<String, String, String>>()
+    var currentName = ""
+    var currentDesc = ""
+    var currentSource = "auto-learned"
+
+    for (line in content.lines()) {
+        when {
+            line.startsWith("### ") -> {
+                // Save previous skill
+                if (currentName.isNotBlank()) {
+                    skills.add(Triple(currentName, currentDesc.trim(), currentSource))
+                }
+                currentName = line.removePrefix("### ").trim()
+                currentDesc = ""
+                currentSource = when {
+                    currentName.startsWith("auto_") -> "auto-learned"
+                    currentName.contains("github", ignoreCase = true) -> "github"
+                    currentName.contains("import", ignoreCase = true) -> "imported"
+                    else -> "custom"
+                }
+            }
+            line.startsWith("- Task:") -> currentDesc = line.removePrefix("- Task:").trim()
+            line.startsWith("- Tools:") && currentDesc.isBlank() -> currentDesc = line.removePrefix("- Tools:").trim()
+            line.startsWith("- Source:") -> currentSource = line.removePrefix("- Source:").trim()
+        }
+    }
+    // Save last skill
+    if (currentName.isNotBlank()) {
+        skills.add(Triple(currentName, currentDesc.trim(), currentSource))
+    }
+    return skills
 }
 
 @Composable

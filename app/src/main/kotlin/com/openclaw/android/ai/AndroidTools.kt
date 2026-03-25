@@ -515,7 +515,8 @@ Rules:
                         add("contents", contents)
                         add("generationConfig", com.google.gson.JsonObject().apply {
                             addProperty("temperature", 0.1)
-                            addProperty("maxOutputTokens", 200)
+                            addProperty("maxOutputTokens", 500)
+                            addProperty("responseMimeType", "application/json")
                         })
                     }
 

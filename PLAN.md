@@ -1,24 +1,34 @@
 # OpenClaw Android Native — PLAN.md
 
-> **Version:** 2.7.1
+> **Version:** 3.0.3 (stable)
 > **Device:** Android 14, API 34
 > **Owner:** Wayan
-> **Updated:** 2026-03-25
-> **Status:** Active development
+> **Updated:** 2026-03-26
+> **Status:** Active development — Phase 1 (VPS foundation) complete
 
 ---
 
-## Current State (v2.7.1)
+## Current State (v3.0.3)
 
 ### What's Done
-- 69 LLM tools (20 Android + 28 utility + 7 service + 3 Python + 4 vision + 5 gestures + 2 explore)
+- 76 LLM tools (20 Android + 28 utility + 7 service + 3 Python + 4 Node.js + 3 Linux + 4 vision + 5 gestures + 2 explore)
+- 3 runtimes: Linux (PRoot + Alpine), Python 3.13, Node.js 22 LTS
 - 19 LLM providers (4 free: Pollinations, Groq, SambaNova, Cerebras)
 - Vision-first interaction: look_and_find + look_and_describe (Gemini Vision) as primary "eyes"
+- 4-strategy coordinate parsing (full JSON → regex → x-only → not-found)
+- Embedded tool call execution (MiniMax/Pollinations text → auto-execute)
 - Gesture shortcuts: scroll_down/up, swipe_left/right, pull_to_refresh
 - Slim system prompt (~70% smaller, agent uses tools instead of text-only responses)
 - Default free LLM (Pollinations) — works immediately after install, no API key needed
 - Smart fallback with efficient models (Groq → Cerebras → Gemini Flash → Pollinations)
 - Market analysis skill (CoinGecko, Fear/Greed, Yahoo Finance)
+- Document creation skills: DOCX, PPTX, XLSX advanced, PDF advanced
+- Linux environment: PRoot + Alpine Linux, apk package manager, 10,000+ packages
+- Full storage access (MANAGE_EXTERNAL_STORAGE) with UI grant button
+- User Guide HTML with specs table
+- Database migrations (chat history survives updates)
+- Export logs to Downloads/ folder
+- 6 rounds of security audits, 40+ issues found and fixed
 - Node.js runtime (install_node, run_node, npm_install, start_node_server)
 - Document creation skills (DOCX, PPTX, XLSX advanced, PDF advanced)
 - Full storage access permission (MANAGE_EXTERNAL_STORAGE) with UI grant button

@@ -111,8 +111,8 @@ class LlmClient {
 
         content?.forEach { block ->
             val obj = block.asJsonObject
-            when (obj.get("type").asString) {
-                "text" -> textParts.append(obj.get("text").asString)
+            when (obj.get("type")?.asString) {
+                "text" -> textParts.append(obj.get("text")?.asString ?: "")
                 "tool_use" -> toolUse = obj
             }
         }

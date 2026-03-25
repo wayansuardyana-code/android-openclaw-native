@@ -118,7 +118,7 @@ class ScreenReaderService : AccessibilityService() {
 
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
-            traverseCompact(child, depth + 1, out, maxNodes, maxDepth)
+            traverseCompact(child, depth + 1, out, maxNodes, maxDepth, screenW, screenH)
             child.recycle()
         }
     }
@@ -167,7 +167,7 @@ class ScreenReaderService : AccessibilityService() {
 
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
-            searchNode(child, query, out, maxResults)
+            searchNode(child, query, out, maxResults, screenW, screenH)
             child.recycle()
         }
     }

@@ -71,7 +71,7 @@ class OpenClawService : Service() {
             // Try immediately
             tryStartTelegram()
             // Then check every 30s if token was added while service is running
-            while (true) {
+            while (isActive) {
                 kotlinx.coroutines.delay(30000)
                 if (telegramBot == null || telegramBot?.isActive() != true) {
                     tryStartTelegram()

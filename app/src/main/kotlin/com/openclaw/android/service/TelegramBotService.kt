@@ -93,6 +93,7 @@ class TelegramBotService {
         isRunning = false
         pollingJob?.cancel()
         pollingJob = null
+        httpClient.close()
         ServiceState.addLog("Telegram: stopped")
     }
 
@@ -191,6 +192,7 @@ class TelegramBotService {
      */
     private suspend fun handleMessage(baseUrl: String, chatId: Long, senderName: String, text: String) {
         lastChatId = chatId
+        var narrationJob: kotlinx.coroutines.Job? = null
         try {
             sendTypingAction(baseUrl, chatId)
 
@@ -199,7 +201,7 @@ class TelegramBotService {
 
             // Live narration: collect narration changes and send to Telegram periodically
             var lastNarration = ""
-            val narrationJob = scope.launch {
+            narrationJob = scope.launch {
                 while (true) {
                     kotlinx.coroutines.delay(3000) // Check every 3 seconds
                     val current = agentLoop.liveNarration.value
@@ -215,7 +217,6 @@ class TelegramBotService {
             }
 
             val response = agentLoop.run(config, text, systemPrompt)
-            narrationJob.cancel()
 
             val chunks = response.chunked(4000)
             for (chunk in chunks) {
@@ -230,6 +231,8 @@ class TelegramBotService {
             } catch (_: Exception) {
                 // Swallow send failure
             }
+        } finally {
+            narrationJob?.cancel()
         }
     }
 

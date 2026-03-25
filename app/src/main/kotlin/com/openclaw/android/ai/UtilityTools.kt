@@ -28,6 +28,16 @@ import io.ktor.http.*
  */
 object UtilityTools {
 
+    private val sharedHttpClient = HttpClient(OkHttp) {
+        engine {
+            config {
+                connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+                writeTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+            }
+        }
+    }
+
     fun getToolDefinitions(): List<ToolDef> = listOf(
         ToolDef(
             name = "run_shell_command",
@@ -372,14 +382,13 @@ object UtilityTools {
                     val chatId = com.openclaw.android.service.TelegramBotService.lastChatId
                     if (chatId == 0L) return@withContext """{"error":"No active Telegram chat"}"""
 
-                    val client = HttpClient(OkHttp)
                     try {
                         val body = com.google.gson.JsonObject().apply {
                             addProperty("chat_id", chatId)
                             addProperty("text", text)
                             addProperty("parse_mode", "Markdown")
                         }
-                        val resp = client.post("https://api.telegram.org/bot$token/sendMessage") {
+                        val resp = sharedHttpClient.post("https://api.telegram.org/bot$token/sendMessage") {
                             contentType(ContentType.Application.Json)
                             setBody(body.toString())
                         }
@@ -391,7 +400,7 @@ object UtilityTools {
                                 addProperty("chat_id", chatId)
                                 addProperty("text", text)
                             }
-                            client.post("https://api.telegram.org/bot$token/sendMessage") {
+                            sharedHttpClient.post("https://api.telegram.org/bot$token/sendMessage") {
                                 contentType(ContentType.Application.Json)
                                 setBody(plain.toString())
                             }
@@ -399,8 +408,6 @@ object UtilityTools {
                         """{"success":true,"chat_id":$chatId,"length":${text.length}}"""
                     } catch (e: Exception) {
                         """{"error":"Failed to send message: ${e.message?.replace("\"", "'")}"}"""
-                    } finally {
-                        client.close()
                     }
                 }
                 "send_telegram_photo" -> {
@@ -415,9 +422,8 @@ object UtilityTools {
                     val chatId = com.openclaw.android.service.TelegramBotService.lastChatId
                     if (chatId == 0L) return@withContext """{"error":"No active Telegram chat"}"""
 
-                    val client = io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp)
                     try {
-                        client.post("https://api.telegram.org/bot$token/sendPhoto") {
+                        sharedHttpClient.post("https://api.telegram.org/bot$token/sendPhoto") {
                             setBody(io.ktor.client.request.forms.MultiPartFormDataContent(
                                 io.ktor.client.request.forms.formData {
                                     append("chat_id", chatId.toString())
@@ -432,8 +438,6 @@ object UtilityTools {
                         """{"success":true,"chat_id":$chatId}"""
                     } catch (e: Exception) {
                         """{"error":"Failed to send photo: ${e.message?.replace("\"", "'")}"}"""
-                    } finally {
-                        client.close()
                     }
                 }
                 "send_telegram_document" -> {
@@ -448,9 +452,8 @@ object UtilityTools {
                     val chatId = com.openclaw.android.service.TelegramBotService.lastChatId
                     if (chatId == 0L) return@withContext """{"error":"No active Telegram chat"}"""
 
-                    val client = io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp)
                     try {
-                        client.post("https://api.telegram.org/bot$token/sendDocument") {
+                        sharedHttpClient.post("https://api.telegram.org/bot$token/sendDocument") {
                             setBody(io.ktor.client.request.forms.MultiPartFormDataContent(
                                 io.ktor.client.request.forms.formData {
                                     append("chat_id", chatId.toString())
@@ -465,8 +468,6 @@ object UtilityTools {
                         """{"success":true,"chat_id":$chatId,"filename":"${file.name}","size":${file.length()}}"""
                     } catch (e: Exception) {
                         """{"error":"Failed to send document: ${e.message?.replace("\"", "'")}"}"""
-                    } finally {
-                        client.close()
                     }
                 }
                 else -> """{"error":"Unknown tool: $name"}"""

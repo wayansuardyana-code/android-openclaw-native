@@ -115,10 +115,10 @@ object AndroidTools {
         ),
         ToolDef(
             name = "android_open_app",
-            description = "Open an app by its package name. Common packages: com.whatsapp, com.instagram.android, com.twitter.android, com.google.android.gm (Gmail), com.android.chrome.",
+            description = "Open an app by package name OR app name. If exact package fails, searches installed apps by name. Examples: 'com.whatsapp' or 'pluang' or 'shopee'. Returns suggestions if no exact match. Common: com.whatsapp, com.instagram.android, com.google.android.gm, com.android.chrome.",
             inputSchema = mapOf(
                 "type" to "object",
-                "properties" to mapOf("packageName" to mapOf("type" to "string")),
+                "properties" to mapOf("packageName" to mapOf("type" to "string", "description" to "Package name (com.example.app) or app name (e.g. 'Pluang', 'Shopee')")),
                 "required" to listOf("packageName")
             )
         ),
@@ -289,7 +289,13 @@ object AndroidTools {
                 "android_read_screen" -> {
                     val reader = ScreenReaderService.instance
                         ?: return """{"error":"Accessibility service not enabled"}"""
-                    reader.readScreen().toString()
+                    val screenResult = reader.readScreen().toString()
+                    // If 0 elements, hint that this app needs SoM/vision
+                    if (screenResult.contains("\"count\":0") || screenResult.contains("\"count\": 0")) {
+                        val pkg = try { reader.rootInActiveWindow?.packageName?.toString() ?: "unknown" } catch (_: Exception) { "unknown" }
+                        """$screenResult
+NOTE: This app ($pkg) has NO accessibility elements — it may use Flutter/React Native/WebView. Use analyze_screen_with_som or analyze_screenshot instead of read_screen. For PIN keypads, use analyze_screen_with_som then tap_som_element on each digit."""
+                    } else screenResult
                 }
                 "find_element" -> {
                     val reader = ScreenReaderService.instance
@@ -398,14 +404,52 @@ object AndroidTools {
                 "android_open_app" -> {
                     val pkg = args.get("packageName").asString
                     val context = com.openclaw.android.OpenClawApplication.instance
-                    val intent = context.packageManager.getLaunchIntentForPackage(pkg)
-                    if (intent != null) {
-                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                        context.startActivity(intent)
-                        """{"success":true,"packageName":"$pkg"}"""
-                    } else {
-                        """{"error":"App not found: $pkg"}"""
+                    val pm = context.packageManager
+
+                    // Try exact package name first
+                    var intent = pm.getLaunchIntentForPackage(pkg)
+
+                    // If not found, search installed apps by label name
+                    var resolvedPkg = pkg
+                    if (intent == null) {
+                        ServiceState.addLog("App not found by package: $pkg — searching by name...")
+                        val searchTerm = pkg.lowercase().replace("com.", "").replace(".", " ")
+                        val installed = pm.getInstalledApplications(0)
+                        val match = installed.firstOrNull { appInfo ->
+                            val label = pm.getApplicationLabel(appInfo).toString().lowercase()
+                            label.contains(searchTerm) || searchTerm.contains(label) ||
+                            label.contains(pkg.substringAfterLast(".").lowercase()) ||
+                            appInfo.packageName.lowercase().contains(searchTerm.replace(" ", ""))
+                        }
+                        if (match != null) {
+                            resolvedPkg = match.packageName
+                            intent = pm.getLaunchIntentForPackage(resolvedPkg)
+                            ServiceState.addLog("Found app by name: ${pm.getApplicationLabel(match)} ($resolvedPkg)")
+                        }
                     }
+
+                    // If still not found, list similar apps
+                    if (intent == null) {
+                        val installed = pm.getInstalledApplications(0)
+                        val suggestions = installed.filter { appInfo ->
+                            val label = pm.getApplicationLabel(appInfo).toString().lowercase()
+                            val pkgLower = appInfo.packageName.lowercase()
+                            val terms = pkg.lowercase().split(".", " ", "_")
+                            terms.any { term -> term.length > 2 && (label.contains(term) || pkgLower.contains(term)) }
+                        }.take(5).map { appInfo ->
+                            val label = pm.getApplicationLabel(appInfo).toString()
+                            """{"name":"$label","package":"${appInfo.packageName}"}"""
+                        }
+                        if (suggestions.isNotEmpty()) {
+                            return """{"error":"App not found: $pkg","hint":"Did you mean one of these?","suggestions":[${suggestions.joinToString(",")}]}"""
+                        }
+                        return """{"error":"App not found: $pkg. Use run_shell_command('pm list packages -3') to list all installed apps."}"""
+                    }
+
+                    intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(intent)
+                    val label = try { pm.getApplicationLabel(pm.getApplicationInfo(resolvedPkg, 0)).toString() } catch (_: Exception) { resolvedPkg }
+                    """{"success":true,"packageName":"$resolvedPkg","appName":"$label"}"""
                 }
                 "shizuku_command" -> {
                     val cmd = args.get("command").asString
@@ -722,17 +766,29 @@ object AndroidTools {
                     """{"success":true,"url":${com.google.gson.Gson().toJson(url)}}"""
                 }
                 "explore_app" -> {
-                    val pkgName = args.get("package_name").asString
+                    var pkgName = args.get("package_name").asString
                     val maxScreens = (args.get("max_screens")?.asInt ?: 5).coerceIn(1, 10)
                     val goal = args.get("goal")?.asString ?: ""
 
                     val reader = ScreenReaderService.instance
                         ?: return """{"error":"Accessibility service not enabled"}"""
 
-                    // Open the app
+                    // Open the app — try by name if package fails
                     val appContext = com.openclaw.android.OpenClawApplication.instance
-                    val launchIntent = appContext.packageManager.getLaunchIntentForPackage(pkgName)
-                        ?: return """{"error":"App not installed: $pkgName"}"""
+                    val pm = appContext.packageManager
+                    var launchIntent = pm.getLaunchIntentForPackage(pkgName)
+                    if (launchIntent == null) {
+                        // Search by name
+                        val match = pm.getInstalledApplications(0).firstOrNull { appInfo ->
+                            val label = pm.getApplicationLabel(appInfo).toString().lowercase()
+                            label.contains(pkgName.lowercase()) || appInfo.packageName.lowercase().contains(pkgName.lowercase())
+                        }
+                        if (match != null) {
+                            pkgName = match.packageName
+                            launchIntent = pm.getLaunchIntentForPackage(pkgName)
+                        }
+                    }
+                    if (launchIntent == null) return """{"error":"App not installed: $pkgName. Try run_shell_command('pm list packages -3') to find the correct package name."}"""
                     launchIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
                     appContext.startActivity(launchIntent)
                     delay(2000) // Wait for app to load

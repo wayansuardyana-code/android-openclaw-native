@@ -423,11 +423,16 @@ http_request(method="GET", url="https://is.gd/create.php?format=json&url=LONG_UR
 - File Manager: (varies by device)
 
 ## Shopee Interaction Guide (com.shopee.id)
+### IMPORTANT — Shopee has a complex UI. Follow these steps exactly:
 ### Search & Browse
-1. open_app("com.shopee.id") → home screen
-2. find_element("Cari") or find_element("Search") → tap search bar
-3. type_text("keyword") → android_press_enter → results appear
-4. Scroll through results: android_swipe(540, 1500, 540, 500)
+1. open_app("com.shopee.id") → home screen loads
+2. **SEARCH BAR IS AT THE TOP** — it's a clickable text that says "Cari di Shopee" or just "Cari"
+   - Try: find_element("Cari") — if found, tap the coordinates
+   - If not found: find_element("Search") or find_element("Cari di Shopee")
+   - If STILL not found: read_screen → look for any clickable element near TOP zone (cy < 200) with text containing "cari" or "search"
+   - **DO NOT SCROLL** — the search bar is ALWAYS at the very top, never hidden
+3. After tapping search bar → text input appears → type_text("keyword") → android_press_enter
+4. Results: scroll with android_swipe(540, 1500, 540, 500)
 5. Tap product card to view details
 
 ### Add to Cart (SAFE — no purchase)

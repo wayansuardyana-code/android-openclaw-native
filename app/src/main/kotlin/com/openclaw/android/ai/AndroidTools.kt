@@ -311,8 +311,8 @@ object AndroidTools {
                 "android_tap" -> {
                     val reader = ScreenReaderService.instance
                         ?: return """{"error":"Accessibility service not enabled"}"""
-                    val x = args.get("x").asFloat
-                    val y = args.get("y").asFloat
+                    val x = args.get("x")?.asFloat ?: return """{"error":"Missing required parameter 'x'"}"""
+                    val y = args.get("y")?.asFloat ?: return """{"error":"Missing required parameter 'y'"}"""
                     val success = suspendCancellableCoroutine<Boolean> { cont ->
                         reader.tap(x, y) { result -> cont.resume(result) }
                     }
@@ -321,10 +321,10 @@ object AndroidTools {
                 "android_swipe" -> {
                     val reader = ScreenReaderService.instance
                         ?: return """{"error":"Accessibility service not enabled"}"""
-                    val x1 = args.get("x1").asFloat
-                    val y1 = args.get("y1").asFloat
-                    val x2 = args.get("x2").asFloat
-                    val y2 = args.get("y2").asFloat
+                    val x1 = args.get("x1")?.asFloat ?: return """{"error":"Missing required parameter 'x1'"}"""
+                    val y1 = args.get("y1")?.asFloat ?: return """{"error":"Missing required parameter 'y1'"}"""
+                    val x2 = args.get("x2")?.asFloat ?: return """{"error":"Missing required parameter 'x2'"}"""
+                    val y2 = args.get("y2")?.asFloat ?: return """{"error":"Missing required parameter 'y2'"}"""
                     val success = suspendCancellableCoroutine<Boolean> { cont ->
                         reader.swipe(x1, y1, x2, y2) { result -> cont.resume(result) }
                     }
@@ -476,19 +476,31 @@ object AndroidTools {
                         val client = io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
                             engine { config { readTimeout(30, java.util.concurrent.TimeUnit.SECONDS) } }
                         }
-                        val resp = client.post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$geminiKey") {
+                        val resp = client.post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$geminiKey") {
                             contentType(ContentType.Application.Json)
                             setBody(requestBody.toString())
                         }
                         client.close()
                         val respText = resp.bodyAsText()
-                        val respJson = com.google.gson.JsonParser.parseString(respText).asJsonObject
+                        ServiceState.addLog("Vision API response: ${respText.take(200)}")
+                        val respJson = try {
+                            com.google.gson.JsonParser.parseString(respText).asJsonObject
+                        } catch (e: Exception) {
+                            return """{"error":"Vision API returned invalid JSON: ${respText.take(150).replace("\"", "'")}"}"""
+                        }
+
+                        // Check for error response
+                        if (respJson.has("error")) {
+                            val errMsg = respJson.getAsJsonObject("error")?.get("message")?.asString ?: "Unknown error"
+                            return """{"error":"Gemini Vision error: ${errMsg.take(200).replace("\"", "'")}"}"""
+                        }
+
                         val text = respJson.getAsJsonArray("candidates")
                             ?.get(0)?.asJsonObject
                             ?.getAsJsonObject("content")
                             ?.getAsJsonArray("parts")
                             ?.get(0)?.asJsonObject
-                            ?.get("text")?.asString ?: "Vision analysis failed"
+                            ?.get("text")?.asString ?: "Vision analysis returned no text — response: ${respText.take(200)}"
 
                         ServiceState.addLog("Vision: analyzed screenshot (${text.length} chars)")
                         """{"success":true,"description":${com.google.gson.Gson().toJson(text)},"screenshot":"${file.absolutePath}"}"""

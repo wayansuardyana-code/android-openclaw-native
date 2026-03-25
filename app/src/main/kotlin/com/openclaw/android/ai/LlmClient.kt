@@ -65,8 +65,8 @@ class LlmClient {
             // Use fast/efficient models for fallback (not the expensive defaults)
             val actualProvider = AgentConfig.activeProvider
             val fallbackModels = mapOf(
-                "gemini" to "gemini-2.5-flash",
-                "google" to "gemini-2.5-flash",
+                "gemini" to "gemini-3.1-flash",
+                "google" to "gemini-3.1-flash",
                 "anthropic" to "claude-haiku-4-5-20251001",
                 "openai" to "gpt-4.1-mini",
                 "minimax" to "MiniMax-M2.5-Highspeed",

@@ -39,10 +39,16 @@ object ModelRegistry {
         ModelInfo("MiniMax-M2.1", "MiniMax M2.1", "minimax"),
 
         // ── Google / Gemini ──
+        ModelInfo("gemini-3.1-flash", "Gemini 3.1 Flash", "google"),
+        ModelInfo("gemini-3.0-flash", "Gemini 3 Flash", "google"),
+        ModelInfo("gemini-3.0-pro", "Gemini 3 Pro", "google"),
         ModelInfo("gemini-2.5-pro", "Gemini 2.5 Pro", "google"),
         ModelInfo("gemini-2.5-flash", "Gemini 2.5 Flash", "google"),
         ModelInfo("gemini-2.0-flash", "Gemini 2.0 Flash", "google"),
         // Alias — same models under "gemini" provider name
+        ModelInfo("gemini-3.1-flash", "Gemini 3.1 Flash", "gemini"),
+        ModelInfo("gemini-3.0-flash", "Gemini 3 Flash", "gemini"),
+        ModelInfo("gemini-3.0-pro", "Gemini 3 Pro", "gemini"),
         ModelInfo("gemini-2.5-pro", "Gemini 2.5 Pro", "gemini"),
         ModelInfo("gemini-2.5-flash", "Gemini 2.5 Flash", "gemini"),
         ModelInfo("gemini-2.0-flash", "Gemini 2.0 Flash", "gemini"),
@@ -82,6 +88,8 @@ object ModelRegistry {
         ModelInfo("openai/gpt-5.4", "GPT-5.4", "openrouter"),
         ModelInfo("openai/gpt-4o", "GPT-4o", "openrouter"),
         ModelInfo("openai/gpt-4o-mini", "GPT-4o Mini", "openrouter"),
+        ModelInfo("google/gemini-3.1-flash", "Gemini 3.1 Flash", "openrouter"),
+        ModelInfo("google/gemini-3.0-pro", "Gemini 3 Pro", "openrouter"),
         ModelInfo("google/gemini-2.5-flash", "Gemini 2.5 Flash", "openrouter"),
         ModelInfo("google/gemini-2.5-pro", "Gemini 2.5 Pro", "openrouter"),
         ModelInfo("deepseek/deepseek-chat", "DeepSeek V3", "openrouter"),

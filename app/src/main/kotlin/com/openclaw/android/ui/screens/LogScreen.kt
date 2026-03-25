@@ -91,16 +91,18 @@ fun LogsTab() {
                     try {
                         val ctx = com.openclaw.android.OpenClawApplication.instance
                         val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
-                        val docsDir = java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS), "OpenClaw")
-                        docsDir.mkdirs()
-                        val file = java.io.File(docsDir, "logs_$timestamp.txt")
+                        // Save to Downloads (easily findable in file manager)
+                        val dlDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+                        dlDir.mkdirs()
+                        val file = java.io.File(dlDir, "openclaw_logs_$timestamp.txt")
                         file.writeText(logs.joinToString("\n"))
-                        clipboard.setText(AnnotatedString(file.absolutePath))
-                        android.widget.Toast.makeText(ctx, "Exported: ${file.name}", android.widget.Toast.LENGTH_SHORT).show()
+                        // Copy full log text to clipboard AND show path
+                        clipboard.setText(AnnotatedString(logs.joinToString("\n")))
+                        android.widget.Toast.makeText(ctx, "Saved to Downloads/${file.name} + copied to clipboard", android.widget.Toast.LENGTH_LONG).show()
                     } catch (e: Exception) {
                         // Fallback: copy all to clipboard
                         clipboard.setText(AnnotatedString(logs.joinToString("\n")))
-                        android.widget.Toast.makeText(com.openclaw.android.OpenClawApplication.instance, "Copied to clipboard (export failed)", android.widget.Toast.LENGTH_SHORT).show()
+                        android.widget.Toast.makeText(com.openclaw.android.OpenClawApplication.instance, "Logs copied to clipboard (${logs.size} entries)", android.widget.Toast.LENGTH_SHORT).show()
                     }
                 }) {
                     Icon(Icons.Default.Share, "Export", tint = TEXT2, modifier = Modifier.size(20.dp))

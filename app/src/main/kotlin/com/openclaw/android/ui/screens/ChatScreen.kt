@@ -427,7 +427,7 @@ fun ChatScreen() {
                 }
 
                 // Cap skills to save tokens (skills.md can grow to 10K+)
-                val cappedSkills = if (skills.length > 2000) skills.take(2000) + "\n...(truncated)" else skills
+                val cappedSkills = if (skills.length > 1000) skills.take(1000) + "\n...(truncated)" else skills
 
                 val systemPrompt = """$soul
 

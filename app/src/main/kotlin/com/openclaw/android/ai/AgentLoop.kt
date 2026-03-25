@@ -251,6 +251,54 @@ class AgentLoop(private val llmClient: LlmClient) {
                     }
                 }
 
+                // Check if text response contains an embedded tool call (MiniMax/Pollinations pattern)
+                // e.g. {"type":"tool_use","name":"android_tap","input":{"x":630,"y":175}}
+                val embeddedToolMatch = Regex("\"name\"\\s*:\\s*\"(android_tap|android_swipe|android_type_text|android_press_back|android_press_home|android_press_enter|android_open_app|look_and_find|look_and_describe|scroll_down|scroll_up|android_read_screen|find_element|take_screenshot|analyze_screenshot|analyze_screen_with_som|tap_som_element)\"").find(content)
+                if (embeddedToolMatch != null) {
+                    val toolName = embeddedToolMatch.groupValues[1]
+                    ServiceState.addLog("Agent: found embedded tool call '$toolName' in text response — executing")
+                    try {
+                        // Extract input/parameters from the embedded JSON
+                        val inputJson = JsonObject()
+                        // Extract x,y for tap/swipe
+                        val xVal = Regex("\"x\"\\s*[>:]\\s*(\\d+)").find(content)?.groupValues?.get(1)?.toFloatOrNull()
+                        val yVal = Regex("\"y\"\\s*[>:]\\s*(\\d+)").find(content)?.groupValues?.get(1)?.toFloatOrNull()
+                        if (xVal != null) inputJson.addProperty("x", xVal)
+                        if (yVal != null) inputJson.addProperty("y", yVal)
+                        // Extract text for type_text
+                        val textVal = Regex("\"text\"\\s*[>:]\\s*\"([^\"]+)\"").find(content)?.groupValues?.get(1)
+                        if (textVal != null) inputJson.addProperty("text", textVal)
+                        // Extract target for look_and_find
+                        val targetVal = Regex("\"target\"\\s*[>:]\\s*\"([^\"]+)\"").find(content)?.groupValues?.get(1)
+                            ?: Regex("<parameter name=\"target\">([^<]+)</parameter>").find(content)?.groupValues?.get(1)
+                        if (targetVal != null) inputJson.addProperty("target", targetVal)
+                        // Extract packageName for open_app
+                        val pkgVal = Regex("\"packageName\"\\s*[>:]\\s*\"([^\"]+)\"").find(content)?.groupValues?.get(1)
+                        if (pkgVal != null) inputJson.addProperty("packageName", pkgVal)
+                        // Extract id for tap_som_element
+                        val idVal = Regex("\"id\"\\s*[>:]\\s*(\\d+)").find(content)?.groupValues?.get(1)?.toIntOrNull()
+                        if (idVal != null) inputJson.addProperty("id", idVal)
+
+                        toolsUsed.add(toolName)
+                        _liveNarration.value = "Found embedded: $toolName"
+                        val toolResult = AndroidTools.executeTool(toolName, inputJson)
+                        ServiceState.addLog("Agent: embedded tool $toolName returned ${toolResult.take(100)}...")
+                        autoMemoryFromTool(toolName, inputJson, toolResult)
+
+                        messages.add(LlmClient.Message("assistant", content))
+                        val feedback = pendingFeedback
+                        if (feedback != null) {
+                            pendingFeedback = null
+                            messages.add(LlmClient.Message("user", "[Tool result for $toolName]: $toolResult\n\n[USER FEEDBACK]: $feedback"))
+                        } else {
+                            messages.add(LlmClient.Message("user", "[Tool result for $toolName]: $toolResult"))
+                        }
+                        continue
+                    } catch (e: Exception) {
+                        ServiceState.addLog("Agent: embedded tool exec failed: ${e.message?.take(80)}")
+                    }
+                }
+
                 // Plain text response — check if agent SHOULD have called a tool
                 // If step 1 and no tools used and user asked for action → nudge agent to use tools
                 if (step == 1 && toolsUsed.isEmpty() && looksLikeActionRequest(userMessage)) {

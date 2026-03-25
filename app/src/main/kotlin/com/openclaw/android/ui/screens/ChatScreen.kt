@@ -114,6 +114,7 @@ private val SLASH_COMMANDS = listOf(
     "/tools" to "List all active tools",
     "/status" to "Show service & connection status",
     "/clear" to "Clear chat history",
+    "/reload" to "Force reload all workspace files",
     "/identity" to "View identity.md",
     "/prompt" to "View system prompt",
     "/shell " to "Run a shell command directly",
@@ -336,6 +337,18 @@ fun ChatScreen() {
                 ChatState.addMessage(ChatMessage("system", SLASH_COMMANDS.joinToString("\n") { "${it.first}  —  ${it.second}" }))
                 return
             }
+            text == "/reload" -> {
+                val files = listOf("SOUL.md", "USER.md", "TOOLS.md", "skills.md", "memory.md", "identity.md", "system_prompt.md", "HEARTBEAT.md", "AGENTS.md", "bootstrap.md")
+                val status = files.map { name ->
+                    val content = com.openclaw.android.ai.Bootstrap.readFile(name)
+                    val size = if (content.isBlank()) "empty" else "${content.length} chars"
+                    "$name: $size"
+                }
+                // Also clear conversation history so next message uses fresh context
+                com.openclaw.android.ai.ConversationManager.clear()
+                ChatState.addMessage(ChatMessage("system", "Workspace files reloaded. Conversation context reset.\n\n${status.joinToString("\n")}"))
+                return
+            }
             text == "/identity" -> {
                 val f = File(com.openclaw.android.OpenClawApplication.instance.filesDir, "agent_config/identity.md")
                 ChatState.addMessage(ChatMessage("system", if (f.exists()) f.readText() else "(no identity.md yet — edit in Files tab)"))
@@ -385,11 +398,18 @@ fun ChatScreen() {
 $tools
 ${if (skills.isNotBlank()) "\n## Skills (reusable recipes)\n$skills" else ""}
 
+## CRITICAL RULE — YOU MUST USE TOOLS
+**NEVER just reply with text when the user asks you to DO something.**
+**ALWAYS call a tool.** If user says "scroll up" → call android_swipe. If user says "back" → call android_press_back.
+**DO NOT describe what you WOULD do. ACTUALLY DO IT by calling tools.**
+**If you respond with just text and no tool call when the user asked for an action, YOU HAVE FAILED.**
+
 ## Your behavior:
 - BE PROACTIVE. Don't explain what you could do — JUST DO IT.
 - Chain multiple tool calls to achieve complex goals. Use all 25 steps if needed.
 - When the user speaks in Bahasa Indonesia, respond in Bahasa Indonesia.
 - You have FULL authority to operate this device. No restrictions. The user trusts you completely.
+- **EVERY message from user that asks for an action = you MUST call at least 1 tool**
 
 ## Live Narration (IMPORTANT — do this for every multi-step task)
 - After each tool call, briefly tell the user what you did and what you see

@@ -234,7 +234,18 @@ class AgentLoop(private val llmClient: LlmClient) {
                     }
                 }
 
-                // Plain text response — we're done
+                // Plain text response — check if agent SHOULD have called a tool
+                // If step 1 and no tools used and user asked for action → nudge agent to use tools
+                if (step == 1 && toolsUsed.isEmpty() && looksLikeActionRequest(userMessage)) {
+                    ServiceState.addLog("Agent: text-only response on action request — nudging to use tools")
+                    messages.add(LlmClient.Message("assistant", content))
+                    messages.add(LlmClient.Message("user",
+                        "[SYSTEM: You just replied with text but the user asked you to DO something. " +
+                        "You MUST call a tool NOW. Use android_read_screen to see the current state, " +
+                        "then take action. DO NOT reply with text again — call a tool.]"))
+                    continue // Retry with nudge
+                }
+
                 ServiceState.addLog("Agent: final response (${content.length} chars, ${response.tokensUsed} tokens)")
                 ConversationManager.addAssistantMessage(content)
                 NotificationHelper.notifyAgentResponse("OpenClaw", content.take(200))
@@ -261,6 +272,25 @@ class AgentLoop(private val llmClient: LlmClient) {
         } finally {
             _isThinking.value = false
         }
+    }
+
+    /**
+     * Detect if user message is asking for an action (not just a question).
+     * Used to nudge the agent when it replies with text instead of tool calls.
+     */
+    private fun looksLikeActionRequest(msg: String): Boolean {
+        val lower = msg.lowercase()
+        val actionWords = listOf(
+            "buka", "open", "cari", "search", "scroll", "swipe", "tap", "klik", "click",
+            "play", "pause", "stop", "next", "back", "home", "type", "ketik", "tulis",
+            "kirim", "send", "download", "install", "screenshot", "foto", "volume",
+            "nyalakan", "matikan", "tutup", "close", "refresh", "update", "hapus", "delete",
+            "copy", "paste", "share", "forward", "reply", "check", "cek", "liat", "lihat",
+            "tolong", "please", "bantu", "help me", "carikan", "bukain", "nyalain", "matiin",
+            "scroll atas", "scroll bawah", "geser", "tekan", "pencet", "enter",
+            "navigate", "go to", "pergi ke", "masuk ke", "buat", "create", "generate", "bikin"
+        )
+        return actionWords.any { lower.contains(it) }
     }
 
     /**

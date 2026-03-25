@@ -264,6 +264,24 @@ fun SettingsScreen(onStartService: () -> Unit = {}, onStopService: () -> Unit = 
 
                     Spacer(Modifier.height(8.dp))
 
+                    // User Guide button
+                    Button(onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                            setDataAndType(Uri.parse("file:///android_asset/user_guide.html"), "text/html")
+                            setClassName("com.android.chrome", "com.google.android.apps.chrome.Main")
+                        }
+                        try { context.startActivity(intent) } catch (_: Exception) {
+                            try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("file:///android_asset/user_guide.html"))) } catch (_: Exception) {
+                                Toast.makeText(context, "Open user_guide.html in Files tab", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }, colors = ButtonDefaults.buttonColors(containerColor = GREEN), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Help, null, Modifier.size(16.dp)); Spacer(Modifier.width(4.dp))
+                        Text("User Guide", fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                    }
+
+                    Spacer(Modifier.height(4.dp))
+
                     // Accessibility Setup Guide button
                     OutlinedButton(onClick = {
                         val intent = Intent(Intent.ACTION_VIEW).apply {

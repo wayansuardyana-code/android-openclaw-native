@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenClaw (Nate) — User Guide</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0D1117; color: #F0F6FC; font-family: 'Segoe UI', system-ui, sans-serif; padding: 16px; line-height: 1.6; }
+h1 { color: #58A6FF; font-size: 22px; margin-bottom: 4px; }
+h2 { color: #58A6FF; font-size: 17px; margin: 20px 0 8px; border-bottom: 1px solid #30363D; padding-bottom: 4px; }
+h3 { color: #D2A8FF; font-size: 15px; margin: 14px 0 6px; }
+p, li { font-size: 14px; color: #C9D1D9; margin-bottom: 6px; }
+ol, ul { padding-left: 20px; }
+code { background: #161B22; color: #3FB950; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+th { background: #161B22; color: #58A6FF; text-align: left; padding: 8px; font-size: 13px; border: 1px solid #30363D; }
+td { padding: 8px; font-size: 13px; border: 1px solid #30363D; color: #C9D1D9; }
+tr:nth-child(even) { background: #161B22; }
+.step { background: #161B22; border: 1px solid #30363D; border-radius: 8px; padding: 12px; margin: 8px 0; }
+.step-num { background: #58A6FF; color: #0D1117; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; font-size: 13px; margin-right: 8px; }
+.warn { background: #1C1207; border: 1px solid #D29922; border-radius: 8px; padding: 10px; margin: 10px 0; }
+.info { background: #0C2D48; border: 1px solid #58A6FF; border-radius: 8px; padding: 10px; margin: 10px 0; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+.badge-green { background: #238636; color: white; }
+.badge-blue { background: #1f6feb; color: white; }
+.badge-orange { background: #9e6a03; color: white; }
+</style>
+</head>
+<body>
+
+<h1>OpenClaw (Nate)</h1>
+<p style="color: #8B949E;">Autonomous AI Agent with Full Device Control</p>
+
+<h2>Minimum Requirements</h2>
+
+<table>
+<tr><th>Requirement</th><th>Minimum</th><th>Recommended</th></tr>
+<tr><td>Android Version</td><td>7.0 Nougat (API 24)</td><td>11+ (API 30)</td></tr>
+<tr><td>RAM</td><td>3 GB</td><td>4 GB+</td></tr>
+<tr><td>Free Storage</td><td>500 MB</td><td>2 GB+</td></tr>
+<tr><td>Processor</td><td>ARM64 (aarch64)</td><td>Snapdragon 600+ / Helio G series</td></tr>
+<tr><td>Screen</td><td>Any</td><td>720p+</td></tr>
+<tr><td>Internet</td><td>Required for LLM</td><td>WiFi recommended</td></tr>
+</table>
+
+<div class="info">
+<p><strong>Compatible with:</strong> Samsung, Xiaomi, OPPO, Vivo, Realme, ADVAN, Infinix, Poco, OnePlus, Huawei, Google Pixel, Motorola, Nokia, Asus — basically every Android phone sold since 2017.</p>
+</div>
+
+<h2>First-Time Setup</h2>
+
+<div class="step">
+<p><span class="step-num">1</span> <strong>Install APK</strong> — Download from GitHub Releases or via "Check Updates" button</p>
+</div>
+
+<div class="step">
+<p><span class="step-num">2</span> <strong>Enable Accessibility Service</strong></p>
+<p>Settings → Accessibility → OpenClaw → <strong>ON</strong></p>
+<p style="color:#8B949E; font-size:12px;">This lets Nate see and interact with your screen (tap, swipe, type, read UI)</p>
+</div>
+
+<div class="step">
+<p><span class="step-num">3</span> <strong>Grant Full Storage Access</strong></p>
+<p>OpenClaw Settings → Permissions → Grant "Full Storage Access"</p>
+<p style="color:#8B949E; font-size:12px;">Lets Nate access files on /sdcard/ (Photos, Downloads, Documents)</p>
+</div>
+
+<div class="step">
+<p><span class="step-num">4</span> <strong>Add LLM Provider</strong> (or use free default)</p>
+<p>OpenClaw Settings → LLM Providers</p>
+<ul>
+<li><span class="badge badge-green">FREE</span> <strong>Pollinations</strong> — works immediately, no key needed</li>
+<li><span class="badge badge-green">FREE</span> <strong>Gemini</strong> — get free key at <a href="https://aistudio.google.com" style="color:#58A6FF;">aistudio.google.com</a></li>
+<li><span class="badge badge-blue">PAID</span> <strong>OpenRouter</strong> — one key, 100+ models</li>
+</ul>
+</div>
+
+<div class="step">
+<p><span class="step-num">5</span> <strong>Start Service</strong></p>
+<p>OpenClaw Settings → tap <strong>"Start Service"</strong></p>
+</div>
+
+<div class="step">
+<p><span class="step-num">6</span> <strong>Start chatting!</strong></p>
+<p>Go to Chat tab → type a message or use <code>/status</code> to verify</p>
+</div>
+
+<h2>What Nate Can Do</h2>
+
+<h3>Device Control <span class="badge badge-green">76 tools</span></h3>
+<table>
+<tr><th>Category</th><th>Capabilities</th></tr>
+<tr><td>Vision</td><td>See screen via Gemini Vision, find elements by description, get tap coordinates</td></tr>
+<tr><td>Touch</td><td>Tap, long press, swipe, scroll up/down, swipe left/right, pull to refresh</td></tr>
+<tr><td>Input</td><td>Type text, press enter/back/home, open apps by name</td></tr>
+<tr><td>Apps</td><td>Open any installed app, explore unfamiliar UIs, install from Play Store</td></tr>
+<tr><td>Notifications</td><td>Read all notifications</td></tr>
+<tr><td>Media</td><td>Play/pause/next/prev, volume control, brightness</td></tr>
+</table>
+
+<h3>Runtimes</h3>
+<table>
+<tr><th>Runtime</th><th>Size</th><th>Use For</th></tr>
+<tr><td>Linux (Alpine)</td><td>~7 MB</td><td>bash, git, ssh, nginx, postgres, 10K+ packages</td></tr>
+<tr><td>Python 3.13</td><td>~27 MB</td><td>pandas, matplotlib, openpyxl, data analysis</td></tr>
+<tr><td>Node.js 22</td><td>~45 MB</td><td>Express, web servers, npm packages, bots</td></tr>
+</table>
+
+<h3>Communication</h3>
+<table>
+<tr><th>Channel</th><th>How</th></tr>
+<tr><td>Telegram</td><td>Add bot token → Nate responds to messages, sends photos/docs</td></tr>
+<tr><td>Discord</td><td>Webhook URL → send messages</td></tr>
+<tr><td>Slack</td><td>Webhook URL → send messages</td></tr>
+<tr><td>WhatsApp</td><td>Via app control (open WhatsApp → type → send)</td></tr>
+</table>
+
+<h3>Document Creation</h3>
+<table>
+<tr><th>Format</th><th>Method</th></tr>
+<tr><td>CSV, XLSX, PDF</td><td>Built-in Kotlin tools (always works)</td></tr>
+<tr><td>DOCX (Word)</td><td>Python python-docx library</td></tr>
+<tr><td>PPTX (PowerPoint)</td><td>Python python-pptx library</td></tr>
+<tr><td>Advanced XLSX</td><td>Python openpyxl (formulas, charts)</td></tr>
+<tr><td>Advanced PDF</td><td>Python reportlab (layouts, tables)</td></tr>
+</table>
+
+<h2>Slash Commands</h2>
+<table>
+<tr><th>Command</th><th>What it does</th></tr>
+<tr><td><code>/status</code></td><td>Show provider, model, service state, tool count</td></tr>
+<tr><td><code>/tools</code></td><td>List all available tools by category</td></tr>
+<tr><td><code>/clear</code></td><td>Clear chat history</td></tr>
+<tr><td><code>/reload</code></td><td>Reload workspace files + reset context</td></tr>
+<tr><td><code>/help</code></td><td>Show all commands</td></tr>
+<tr><td><code>/identity</code></td><td>View Nate's identity config</td></tr>
+<tr><td><code>/shell &lt;cmd&gt;</code></td><td>Run a shell command directly</td></tr>
+</table>
+
+<h2>Storage Layout</h2>
+<table>
+<tr><th>Location</th><th>Contents</th></tr>
+<tr><td><code>/sdcard/Documents/OpenClaw/notes/</code></td><td>Obsidian-compatible markdown notes</td></tr>
+<tr><td><code>App files → documents/</code></td><td>Generated CSV, XLSX, PDF files</td></tr>
+<tr><td><code>App files → workspace/</code></td><td>SOUL.md, USER.md, memory.md, skills.md</td></tr>
+<tr><td><code>App files → screenshots/</code></td><td>Temporary screenshots (auto-cleaned)</td></tr>
+<tr><td><code>App files → python/</code></td><td>Python runtime (if installed)</td></tr>
+<tr><td><code>App files → nodejs/</code></td><td>Node.js runtime (if installed)</td></tr>
+<tr><td><code>App files → linux/</code></td><td>Linux environment (if installed)</td></tr>
+</table>
+
+<h2>After APK Updates</h2>
+
+<div class="warn">
+<p><strong>Re-enable Accessibility Service</strong> after every update — Android disables it automatically.</p>
+<p>Settings → Accessibility → OpenClaw → <strong>ON</strong></p>
+</div>
+
+<div class="info">
+<p><strong>Your data is safe!</strong> Chat history, memories, scheduled tasks, API keys, and workspace files all survive APK updates.</p>
+</div>
+
+<h2>Troubleshooting</h2>
+
+<div class="step">
+<p><strong>Nate not responding?</strong></p>
+<p>Check: Service started? Accessibility enabled? LLM provider configured? Try <code>/status</code></p>
+</div>
+
+<div class="step">
+<p><strong>Can't find an app?</strong></p>
+<p>Nate searches by name. Say: "buka Pluang" not "buka com.EmasDigi"</p>
+</div>
+
+<div class="step">
+<p><strong>Flutter apps (0 elements)?</strong></p>
+<p>Nate uses Gemini Vision instead of accessibility tree. Needs Gemini API key in Settings.</p>
+</div>
+
+<div class="step">
+<p><strong>Python/Node won't install?</strong></p>
+<p>Some devices block binary execution (SELinux). The Linux environment (PRoot) may work as alternative.</p>
+</div>
+
+<div class="step">
+<p><strong>Battery drain?</strong></p>
+<p>Settings → Battery → OpenClaw → "Unrestricted". Samsung: disable "Put unused apps to sleep".</p>
+</div>
+
+</body>
+</html>

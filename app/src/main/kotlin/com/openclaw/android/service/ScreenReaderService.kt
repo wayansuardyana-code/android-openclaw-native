@@ -51,27 +51,57 @@ class ScreenReaderService : AccessibilityService() {
         }
 
         val result = JsonObject()
-        result.addProperty("pkg", root.packageName?.toString() ?: "?")
-        val nodes = JsonArray()
-        // Get screen dimensions for visibility check
+        val pkg = root.packageName?.toString() ?: "?"
+        result.addProperty("pkg", pkg)
+
         val dm = resources.displayMetrics
         val screenW = dm.widthPixels
         val screenH = dm.heightPixels
 
-        traverseCompact(root, 0, nodes, maxNodes = 80, maxDepth = 15, screenW, screenH)
+        // Collect structured elements with roles and spatial zones
+        val elements = mutableListOf<UiElement>()
+        traverseStructured(root, 0, elements, maxNodes = 80, maxDepth = 15, screenW, screenH)
+
+        // Build structured JSON output with zones and roles
+        val nodes = JsonArray()
+        for (el in elements) {
+            val obj = JsonObject()
+            // Human-readable role instead of raw class
+            obj.addProperty("role", el.role)
+            if (el.text.isNotBlank()) obj.addProperty("text", el.text.take(100))
+            if (el.desc.isNotBlank()) obj.addProperty("desc", el.desc.take(100))
+            if (el.hint.isNotBlank()) obj.addProperty("hint", el.hint.take(60))
+            if (el.id.isNotBlank()) obj.addProperty("id", el.id)
+            // Spatial zone: TOP, MIDDLE, BOTTOM (helps LLM understand layout)
+            obj.addProperty("zone", el.zone)
+            // Actions this element supports
+            if (el.clickable) obj.addProperty("clickable", true)
+            if (el.editable) obj.addProperty("editable", true)
+            if (el.scrollable) obj.addProperty("scrollable", true)
+            if (el.checked) obj.addProperty("checked", true)
+            // Center tap coordinates (ready to use)
+            obj.addProperty("cx", el.cx)
+            obj.addProperty("cy", el.cy)
+            nodes.add(obj)
+        }
+
         result.add("ui", nodes)
         result.addProperty("count", nodes.size())
 
-        // Add focused element info
+        // Generate a natural-language UI summary for the LLM
+        val summary = buildUiSummary(pkg, elements, screenH)
+        result.addProperty("summary", summary)
+
+        // Focused element
         val focused = findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
         if (focused != null) {
             val fRect = Rect()
             focused.getBoundsInScreen(fRect)
             val fObj = JsonObject()
-            fObj.addProperty("t", focused.text?.toString()?.take(80) ?: "")
+            fObj.addProperty("text", focused.text?.toString()?.take(80) ?: "")
             fObj.addProperty("hint", focused.hintText?.toString()?.take(80) ?: "")
-            fObj.addProperty("x", (fRect.left + fRect.right) / 2)
-            fObj.addProperty("y", (fRect.top + fRect.bottom) / 2)
+            fObj.addProperty("cx", (fRect.left + fRect.right) / 2)
+            fObj.addProperty("cy", (fRect.top + fRect.bottom) / 2)
             result.add("focused", fObj)
             focused.recycle()
         }
@@ -80,45 +110,125 @@ class ScreenReaderService : AccessibilityService() {
         return result
     }
 
-    private fun traverseCompact(node: AccessibilityNodeInfo, depth: Int, out: JsonArray, maxNodes: Int, maxDepth: Int, screenW: Int = 1080, screenH: Int = 2400) {
-        if (out.size() >= maxNodes || depth > maxDepth) return
+    /** Structured UI element with role and spatial info */
+    private data class UiElement(
+        val text: String, val desc: String, val hint: String, val id: String,
+        val role: String, val zone: String,
+        val clickable: Boolean, val editable: Boolean, val scrollable: Boolean, val checked: Boolean,
+        val cx: Int, val cy: Int,
+        val left: Int, val top: Int, val right: Int, val bottom: Int
+    )
+
+    /** Classify element into a human-readable role */
+    private fun classifyRole(node: AccessibilityNodeInfo, cls: String, text: String, desc: String, id: String): String {
+        val lowerCls = cls.lowercase()
+        val lowerId = id.lowercase()
+        val lowerText = text.lowercase()
+        val lowerDesc = desc.lowercase()
+
+        return when {
+            node.isEditable || lowerCls.contains("edittext") || lowerCls.contains("textinputlayout") -> "input"
+            lowerCls.contains("button") || lowerCls.contains("imagebutton") -> "button"
+            lowerCls.contains("checkbox") || lowerCls.contains("switch") || lowerCls.contains("toggle") -> "toggle"
+            lowerCls.contains("radiobutton") -> "radio"
+            lowerCls.contains("spinner") || lowerCls.contains("dropdown") -> "dropdown"
+            lowerCls.contains("tab") -> "tab"
+            lowerCls.contains("image") && !node.isClickable -> "image"
+            lowerCls.contains("image") && node.isClickable -> "icon-button"
+            lowerCls.contains("recyclerview") || lowerCls.contains("listview") || node.isScrollable -> "list"
+            lowerId.contains("search") || lowerDesc.contains("search") || lowerText.contains("search") ||
+                lowerId.contains("cari") || lowerDesc.contains("cari") -> "search-box"
+            lowerId.contains("toolbar") || lowerId.contains("action_bar") -> "toolbar"
+            lowerId.contains("tab") -> "tab"
+            lowerId.contains("nav") || lowerId.contains("bottom_bar") -> "nav-bar"
+            node.isClickable && (lowerText.isNotBlank() || lowerDesc.isNotBlank()) -> "button"
+            node.isClickable -> "clickable"
+            else -> "text"
+        }
+    }
+
+    /** Determine spatial zone: TOP (status/toolbar), MIDDLE (content), BOTTOM (nav/actions) */
+    private fun getZone(cy: Int, screenH: Int): String {
+        val topThreshold = screenH / 5       // Top 20%
+        val bottomThreshold = screenH * 4 / 5 // Bottom 20%
+        return when {
+            cy < topThreshold -> "TOP"
+            cy > bottomThreshold -> "BOTTOM"
+            else -> "MIDDLE"
+        }
+    }
+
+    /** Build a natural-language summary of what's on screen */
+    private fun buildUiSummary(pkg: String, elements: List<UiElement>, screenH: Int): String {
+        val appName = pkg.substringAfterLast(".")
+        val searchBoxes = elements.filter { it.role == "search-box" || it.role == "input" && it.zone == "TOP" }
+        val buttons = elements.filter { it.role == "button" || it.role == "icon-button" }
+        val inputs = elements.filter { it.role == "input" }
+        val lists = elements.filter { it.role == "list" }
+        val tabs = elements.filter { it.role == "tab" }
+        val navItems = elements.filter { it.zone == "BOTTOM" && it.clickable }
+
+        val sb = StringBuilder()
+        sb.append("App: $appName | ${elements.size} elements")
+
+        if (searchBoxes.isNotEmpty()) {
+            val s = searchBoxes.first()
+            sb.append(" | SEARCH BAR at top (${s.hint.ifBlank { s.text.ifBlank { "tap to search" } }}, cx=${s.cx} cy=${s.cy})")
+        }
+        if (tabs.isNotEmpty()) {
+            sb.append(" | TABS: ${tabs.joinToString(", ") { it.text.ifBlank { it.desc } }}")
+        }
+        if (inputs.isNotEmpty()) {
+            sb.append(" | ${inputs.size} input field(s)")
+        }
+        if (buttons.size in 1..10) {
+            sb.append(" | Buttons: ${buttons.take(5).joinToString(", ") { it.text.ifBlank { it.desc }.ifBlank { it.id } }}")
+        }
+        if (lists.isNotEmpty()) {
+            sb.append(" | scrollable list in MIDDLE")
+        }
+        if (navItems.size >= 3) {
+            sb.append(" | Bottom nav: ${navItems.take(5).joinToString(", ") { it.text.ifBlank { it.desc } }}")
+        }
+
+        return sb.toString()
+    }
+
+    private fun traverseStructured(node: AccessibilityNodeInfo, depth: Int, out: MutableList<UiElement>, maxNodes: Int, maxDepth: Int, screenW: Int, screenH: Int) {
+        if (out.size >= maxNodes || depth > maxDepth) return
 
         val rect = Rect()
         node.getBoundsInScreen(rect)
         val text = node.text?.toString() ?: ""
         val desc = node.contentDescription?.toString() ?: ""
+        val hint = node.hintText?.toString() ?: ""
         val id = node.viewIdResourceName?.substringAfterLast("/") ?: ""
+        val cls = node.className?.toString()?.substringAfterLast(".") ?: ""
 
-        val hasText = text.isNotBlank()
-        val hasDesc = desc.isNotBlank()
+        val hasContent = text.isNotBlank() || desc.isNotBlank() || hint.isNotBlank()
         val isInteractive = node.isClickable || node.isEditable || node.isScrollable
         val isVisible = rect.width() > 0 && rect.height() > 0
-        // Skip off-screen elements (not visible to user)
         val isOnScreen = rect.bottom > 0 && rect.top < screenH && rect.right > 0 && rect.left < screenW
 
-        if (isVisible && isOnScreen && (hasText || hasDesc || isInteractive)) {
-            val obj = JsonObject()
-            if (hasText) obj.addProperty("t", text.take(100))
-            if (hasDesc) obj.addProperty("d", desc.take(100))
-            if (id.isNotBlank()) obj.addProperty("id", id)
-            if (node.isClickable) obj.addProperty("c", 1)
-            if (node.isEditable) obj.addProperty("e", 1)
-            if (node.isScrollable) obj.addProperty("s", 1)
-            if (node.isChecked) obj.addProperty("chk", 1)
-            if (node.isSelected) obj.addProperty("sel", 1)
-            // Short class type for disambiguation
-            val cls = node.className?.toString()?.substringAfterLast(".") ?: ""
-            if (cls.isNotBlank() && cls != "View" && cls != "ViewGroup") obj.addProperty("cls", cls)
-            // Compact bounds
-            val b = JsonArray()
-            b.add(rect.left); b.add(rect.top); b.add(rect.right); b.add(rect.bottom)
-            obj.add("b", b)
-            out.add(obj)
+        if (isVisible && isOnScreen && (hasContent || isInteractive)) {
+            val cx = (rect.left + rect.right) / 2
+            val cy = (rect.top + rect.bottom) / 2
+            val role = classifyRole(node, cls, text, desc, id)
+            val zone = getZone(cy, screenH)
+
+            out.add(UiElement(
+                text = text, desc = desc, hint = hint, id = id,
+                role = role, zone = zone,
+                clickable = node.isClickable, editable = node.isEditable,
+                scrollable = node.isScrollable, checked = node.isChecked,
+                cx = cx, cy = cy,
+                left = rect.left, top = rect.top, right = rect.right, bottom = rect.bottom
+            ))
         }
 
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
-            traverseCompact(child, depth + 1, out, maxNodes, maxDepth, screenW, screenH)
+            traverseStructured(child, depth + 1, out, maxNodes, maxDepth, screenW, screenH)
             child.recycle()
         }
     }

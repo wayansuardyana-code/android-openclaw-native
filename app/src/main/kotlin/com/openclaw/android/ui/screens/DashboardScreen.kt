@@ -24,8 +24,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openclaw.android.ai.AgentConfig
+import com.openclaw.android.ai.Bootstrap
+import com.openclaw.android.ai.ConversationManager
 import com.openclaw.android.util.ServiceState
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private val BG = Color(0xFF0D1117)
 private val SURFACE = Color(0xFF161B22)
@@ -139,8 +144,46 @@ private fun OverviewTab() {
         contentPadding = PaddingValues(vertical = 12.dp)
     ) {
         item {
-            Text("Mission Control", color = TEXT, fontSize = 22.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-            Text("OpenClaw Android v2.4.0", color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+            var syncStatus by remember { mutableStateOf("") }
+            val scope = rememberCoroutineScope()
+
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Mission Control", color = TEXT, fontSize = 22.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    Text("OpenClaw Android v2.4.0", color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                }
+                // Sync Context button
+                OutlinedButton(
+                    onClick = {
+                        syncStatus = "Syncing..."
+                        scope.launch {
+                            withContext(Dispatchers.IO) {
+                                try {
+                                    // Re-read all workspace files
+                                    val files = Bootstrap.getAllFiles()
+                                    val sizes = files.joinToString(", ") { "${it.first}(${it.second.length})" }
+                                    // Reset conversation context
+                                    ConversationManager.clear()
+                                    ServiceState.addLog("Sync: loaded ${files.size} files — $sizes")
+                                    syncStatus = "${files.size} files synced"
+                                } catch (e: Exception) {
+                                    syncStatus = "Error: ${e.message?.take(30)}"
+                                }
+                            }
+                        }
+                    },
+                    border = BorderStroke(1.dp, CYAN),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Icon(Icons.Default.Sync, null, Modifier.size(14.dp), tint = CYAN)
+                    Spacer(Modifier.width(4.dp))
+                    Text("Sync", fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = CYAN)
+                }
+            }
+            if (syncStatus.isNotBlank()) {
+                Text(syncStatus, color = if (syncStatus.contains("Error")) RED else GREEN, fontSize = 10.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(top = 2.dp))
+            }
         }
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

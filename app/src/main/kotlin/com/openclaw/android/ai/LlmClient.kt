@@ -82,7 +82,7 @@ class LlmClient {
             val fallbackOrder = listOf("groq", "cerebras", "sambanova", "gemini", "google", "pollinations",
                 "deepseek", "openrouter", "huggingface", "minimax", "openai", "anthropic")
             val fallbackProviders = fallbackOrder
-                .filter { it != actualProvider && (AgentConfig.getKeyForProvider(it).isNotBlank() || it in AgentConfig.NO_AUTH_PROVIDERS) }
+                .filter { it != actualProvider && it != "custom" && (AgentConfig.getKeyForProvider(it).isNotBlank() || it in AgentConfig.NO_AUTH_PROVIDERS) }
 
             if (fallbackProviders.isEmpty()) return@withContext primary // No fallbacks available
 

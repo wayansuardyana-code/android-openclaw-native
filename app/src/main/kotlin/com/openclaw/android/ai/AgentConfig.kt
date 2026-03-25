@@ -39,12 +39,11 @@ object AgentConfig {
     }
 
     fun setKeyForProvider(provider: String, key: String) {
-        prefs().edit().putString("key_$provider", key).apply()
-        // Also save under canonical name
+        val edit = prefs().edit().putString("key_$provider", key)
+        // Also save under canonical name (atomic write)
         val canonical = resolveProvider(provider)
-        if (canonical != provider) {
-            prefs().edit().putString("key_$canonical", key).apply()
-        }
+        if (canonical != provider) edit.putString("key_$canonical", key)
+        edit.apply()
     }
 
     // Default models per provider

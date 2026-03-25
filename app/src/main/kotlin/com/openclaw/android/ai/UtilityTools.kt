@@ -767,22 +767,20 @@ object UtilityTools {
                             else -> """{"error":"Unknown service: $service"}"""
                         }
 
-                        // If token expired mid-request, try refreshing and retry once
+                        // If token expired mid-request, force refresh and retry once
                         if (result.contains("Invalid Credentials", ignoreCase = true) ||
                             result.contains("401", ignoreCase = true) ||
                             result.contains("UNAUTHENTICATED", ignoreCase = true)) {
+                            AgentConfig.googleTokenExpiry = 0  // Force expiry
                             val refreshedToken = getValidGoogleToken()
                             if (refreshedToken != token && refreshedToken.isNotBlank()) {
                                 ServiceState.addLog("[Google] Token expired, retrying with refreshed token")
-                                // Force refresh by clearing expiry
-                                AgentConfig.googleTokenExpiry = 0
-                                val newToken = getValidGoogleToken()
                                 result = when (service) {
-                                    "drive" -> googleDrive(newToken, action, params)
-                                    "sheets" -> googleSheets(newToken, action, params)
-                                    "gmail" -> googleGmail(newToken, action, params)
-                                    "calendar" -> googleCalendar(newToken, action, params)
-                                    "docs" -> googleDocs(newToken, action, params)
+                                    "drive" -> googleDrive(refreshedToken, action, params)
+                                    "sheets" -> googleSheets(refreshedToken, action, params)
+                                    "gmail" -> googleGmail(refreshedToken, action, params)
+                                    "calendar" -> googleCalendar(refreshedToken, action, params)
+                                    "docs" -> googleDocs(refreshedToken, action, params)
                                     else -> result
                                 }
                             }
@@ -794,9 +792,11 @@ object UtilityTools {
                 }
 
                 "create_note" -> {
-                    val title = args.get("title").asString.replace(Regex("[/\\\\:*?\"<>|]"), "_")
+                    val title = args.get("title").asString.replace(Regex("[/\\\\:*?\"<>|.]"), "_")
                     val content = args.get("content").asString
-                    val folder = args.get("folder")?.asString ?: ""
+                    val rawFolder = args.get("folder")?.asString ?: ""
+                    // Sanitize folder: no path traversal, no absolute paths
+                    val folder = rawFolder.replace("..", "").replace(Regex("[/\\\\:*?\"<>|]+"), "/").trim('/').replace(Regex("[^a-zA-Z0-9_/ -]"), "_")
 
                     val notesDir = File(
                         android.os.Environment.getExternalStoragePublicDirectory(
@@ -860,15 +860,22 @@ object UtilityTools {
             "rm -rf /", "rm -r /", "mkfs", "dd if=", ":(){ :|:&", "format",
             // Block data exfiltration
             "shared_prefs", "databases/", ".db",
-            // Block network exfiltration
-            "curl ", "wget ", "nc ", "ncat ", "netcat ",
+            // Block network exfiltration — match with and without spaces/tabs
+            "curl", "wget", "nc ", "ncat", "netcat",
+            // Block shell wrappers that bypass blocklist
+            "sh -c", "sh -i", "bash -c", "bash -i", "exec ",
+            // Block backtick/subshell exfiltration
+            "`", "\$(", "/usr/bin/curl", "/usr/bin/wget",
             // Block dangerous operations
             "chmod 777", "su ", "mount ", "umount ",
             // Block package manipulation
-            "pm uninstall", "pm disable", "pm clear"
+            "pm uninstall", "pm disable", "pm clear",
+            // Block reading app private data
+            "/data/data/", "/data/user/"
         )
-        val lowerCmd = command.lowercase()
-        if (blocklist.any { lowerCmd.contains(it) }) {
+        // Normalize: collapse whitespace, remove quotes that could bypass matching
+        val normalized = command.lowercase().replace(Regex("[\\t]+"), " ").replace(Regex("[\"'`]+"), "")
+        if (blocklist.any { normalized.contains(it) }) {
             return """{"error":"Command blocked for security"}"""
         }
 
@@ -1485,7 +1492,14 @@ object UtilityTools {
         try {
             val resp = sharedHttpClient.post("https://oauth2.googleapis.com/token") {
                 contentType(io.ktor.http.ContentType.Application.FormUrlEncoded)
-                setBody("grant_type=refresh_token&refresh_token=$refreshToken&client_id=$clientId&client_secret=$clientSecret")
+                setBody(io.ktor.client.request.forms.FormDataContent(
+                    io.ktor.http.Parameters.build {
+                        append("grant_type", "refresh_token")
+                        append("refresh_token", refreshToken)
+                        append("client_id", clientId)
+                        append("client_secret", clientSecret)
+                    }
+                ))
             }
             val respText = resp.bodyAsText()
             val json = Gson().fromJson(respText, JsonObject::class.java)

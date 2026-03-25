@@ -774,7 +774,7 @@ object AndroidTools {
                         "OpenClaw/notes"
                     )
                     notesDir.mkdirs()
-                    val appName = pkgName.substringAfterLast(".")
+                    val appName = pkgName.substringAfterLast(".").replace(Regex("[^a-zA-Z0-9_-]"), "_")
                     val noteFile = java.io.File(notesDir, "app_map_$appName.md")
 
                     val noteContent = buildString {

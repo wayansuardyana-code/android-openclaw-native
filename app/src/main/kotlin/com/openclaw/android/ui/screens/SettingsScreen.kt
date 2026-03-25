@@ -40,7 +40,9 @@ private val TEXT2 = Color(0xFF8B949E)
 
 private val ALL_PROVIDERS = listOf(
     "anthropic" to "Anthropic Claude", "openai" to "OpenAI", "minimax" to "MiniMax",
-    "google" to "Google Gemini", "openrouter" to "OpenRouter", "deepseek" to "DeepSeek",
+    "google" to "Google Gemini", "gemini" to "Gemini (AI Studio)",
+    "kimi" to "Kimi", "moonshot" to "Moonshot AI",
+    "openrouter" to "OpenRouter", "deepseek" to "DeepSeek",
     "mistral" to "Mistral AI", "groq" to "Groq", "xai" to "xAI (Grok)",
     "together" to "Together AI", "fireworks" to "Fireworks AI",
     "ollama" to "Ollama (Local)", "custom" to "Custom API",
@@ -115,23 +117,45 @@ fun SettingsScreen(onStartService: () -> Unit = {}, onStopService: () -> Unit = 
                 })
         }
 
-        // Model selector — only if there's an active provider with a token
-        if (activeProvider.isNotBlank() && savedLlms.any { it.first == activeProvider }) {
+        // Model selector — shows ALL models from ALL providers with keys
+        if (savedLlms.isNotEmpty()) {
             item {
                 Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(10.dp)) {
                     Column(Modifier.padding(12.dp)) {
                         Text("Model", color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                        Text("Pick model → auto-sets active provider", color = TEXT2, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
                         Spacer(Modifier.height(4.dp))
-                        val models = ModelRegistry.getModelsForProvider(activeProvider)
-                        if (models.isNotEmpty()) {
+                        // Collect all models from all providers that have saved keys
+                        val allModels = savedLlms.flatMap { (providerId, _) ->
+                            ModelRegistry.getModelsForProvider(providerId).map { it to providerId }
+                        }
+                        if (allModels.isNotEmpty()) {
                             Box {
                                 OutlinedButton(onClick = { showModelDropdown = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(8.dp), border = BorderStroke(1.dp, BORDER), colors = ButtonDefaults.outlinedButtonColors(contentColor = TEXT)) {
-                                    Text(models.find { it.id == selectedModel }?.displayName ?: selectedModel.ifBlank { "Select..." }, fontFamily = FontFamily.Monospace, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                                    val modelLabel = allModels.find { it.first.id == selectedModel && it.second == activeProvider }?.first?.displayName ?: selectedModel.ifBlank { "Select..." }
+                                    Text("$activeProvider/$modelLabel", fontFamily = FontFamily.Monospace, fontSize = 13.sp, modifier = Modifier.weight(1f))
                                     Icon(Icons.Default.ArrowDropDown, null)
                                 }
-                                DropdownMenu(expanded = showModelDropdown, onDismissRequest = { showModelDropdown = false }, modifier = Modifier.background(Color(0xFF1C2333)).heightIn(max = 300.dp)) {
-                                    models.forEach { m -> DropdownMenuItem(text = { Text(m.displayName, color = if (m.id == selectedModel) CYAN else TEXT, fontFamily = FontFamily.Monospace, fontSize = 13.sp) },
-                                        onClick = { selectedModel = m.id; AgentConfig.setModelForProvider(activeProvider, m.id); showModelDropdown = false }) }
+                                DropdownMenu(expanded = showModelDropdown, onDismissRequest = { showModelDropdown = false }, modifier = Modifier.background(Color(0xFF1C2333)).heightIn(max = 400.dp)) {
+                                    // Group by provider
+                                    var lastProvider = ""
+                                    allModels.forEach { (model, providerId) ->
+                                        if (providerId != lastProvider) {
+                                            lastProvider = providerId
+                                            val label = ALL_PROVIDERS.find { it.first == providerId }?.second ?: providerId
+                                            DropdownMenuItem(text = { Text("── $label ──", color = TEXT2, fontFamily = FontFamily.Monospace, fontSize = 11.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) }, onClick = {}, enabled = false)
+                                        }
+                                        DropdownMenuItem(
+                                            text = { Text("${providerId}/${model.displayName}", color = if (model.id == selectedModel && activeProvider == providerId) CYAN else TEXT, fontFamily = FontFamily.Monospace, fontSize = 13.sp) },
+                                            onClick = {
+                                                selectedModel = model.id
+                                                activeProvider = providerId
+                                                AgentConfig.activeProvider = providerId
+                                                AgentConfig.setModelForProvider(providerId, model.id)
+                                                showModelDropdown = false
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         } else {

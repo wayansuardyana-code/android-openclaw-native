@@ -38,10 +38,14 @@ object ModelRegistry {
         ModelInfo("MiniMax-M2.5-Highspeed", "MiniMax M2.5 Highspeed", "minimax"),
         ModelInfo("MiniMax-M2.1", "MiniMax M2.1", "minimax"),
 
-        // ── Google ──
+        // ── Google / Gemini ──
         ModelInfo("gemini-2.5-pro", "Gemini 2.5 Pro", "google"),
         ModelInfo("gemini-2.5-flash", "Gemini 2.5 Flash", "google"),
         ModelInfo("gemini-2.0-flash", "Gemini 2.0 Flash", "google"),
+        // Alias — same models under "gemini" provider name
+        ModelInfo("gemini-2.5-pro", "Gemini 2.5 Pro", "gemini"),
+        ModelInfo("gemini-2.5-flash", "Gemini 2.5 Flash", "gemini"),
+        ModelInfo("gemini-2.0-flash", "Gemini 2.0 Flash", "gemini"),
 
         // ── DeepSeek ──
         ModelInfo("deepseek-chat", "DeepSeek V3", "deepseek"),
@@ -72,12 +76,31 @@ object ModelRegistry {
         ModelInfo("accounts/fireworks/models/llama-v3p3-70b-instruct", "Llama 3.3 70B", "fireworks"),
         ModelInfo("accounts/fireworks/models/qwen2p5-72b-instruct", "Qwen 2.5 72B", "fireworks"),
 
-        // ── OpenRouter ──
+        // ── OpenRouter (popular models — user can also type any model ID) ──
         ModelInfo("anthropic/claude-sonnet-4-6", "Claude Sonnet 4.6", "openrouter"),
+        ModelInfo("anthropic/claude-haiku-4-5", "Claude Haiku 4.5", "openrouter"),
+        ModelInfo("openai/gpt-5.4", "GPT-5.4", "openrouter"),
         ModelInfo("openai/gpt-4o", "GPT-4o", "openrouter"),
+        ModelInfo("openai/gpt-4o-mini", "GPT-4o Mini", "openrouter"),
         ModelInfo("google/gemini-2.5-flash", "Gemini 2.5 Flash", "openrouter"),
+        ModelInfo("google/gemini-2.5-pro", "Gemini 2.5 Pro", "openrouter"),
         ModelInfo("deepseek/deepseek-chat", "DeepSeek V3", "openrouter"),
+        ModelInfo("deepseek/deepseek-reasoner", "DeepSeek R1", "openrouter"),
         ModelInfo("meta-llama/llama-3.3-70b-instruct", "Llama 3.3 70B", "openrouter"),
+        ModelInfo("qwen/qwen-2.5-72b-instruct", "Qwen 2.5 72B", "openrouter"),
+        ModelInfo("mistralai/mistral-large-latest", "Mistral Large", "openrouter"),
+        ModelInfo("x-ai/grok-3", "Grok 3", "openrouter"),
+        ModelInfo("moonshotai/kimi-k2", "Kimi K2", "openrouter"),
+
+        // ── Kimi (api.kimi.ai) ──
+        ModelInfo("kimi-k2", "Kimi K2", "kimi"),
+        ModelInfo("kimi-k2-0711", "Kimi K2 0711", "kimi"),
+
+        // ── Moonshot (api.moonshot.cn) ──
+        ModelInfo("moonshot-v1-auto", "Moonshot V1 Auto", "moonshot"),
+        ModelInfo("moonshot-v1-128k", "Moonshot V1 128K", "moonshot"),
+        ModelInfo("moonshot-v1-32k", "Moonshot V1 32K", "moonshot"),
+        ModelInfo("moonshot-v1-8k", "Moonshot V1 8K", "moonshot"),
 
         // ── Ollama ──
         ModelInfo("llama3.2", "Llama 3.2", "ollama"),

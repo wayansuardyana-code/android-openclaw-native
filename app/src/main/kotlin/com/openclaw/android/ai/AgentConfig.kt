@@ -22,12 +22,30 @@ object AgentConfig {
         get() = prefs().getBoolean("push_notifications", true)
         set(v) = prefs().edit().putBoolean("push_notifications", v).apply()
 
-    // Dynamic key storage per provider
-    fun getKeyForProvider(provider: String): String =
-        prefs().getString("key_$provider", "") ?: ""
+    // Provider aliases — some providers have multiple names
+    private fun resolveProvider(provider: String): String = when (provider) {
+        "gemini" -> "google"  // gemini is an alias for google
+        else -> provider
+    }
 
-    fun setKeyForProvider(provider: String, key: String) =
+    // Dynamic key storage per provider
+    fun getKeyForProvider(provider: String): String {
+        val key = prefs().getString("key_$provider", "") ?: ""
+        // Also check alias
+        if (key.isBlank() && provider != resolveProvider(provider)) {
+            return prefs().getString("key_${resolveProvider(provider)}", "") ?: ""
+        }
+        return key
+    }
+
+    fun setKeyForProvider(provider: String, key: String) {
         prefs().edit().putString("key_$provider", key).apply()
+        // Also save under canonical name
+        val canonical = resolveProvider(provider)
+        if (canonical != provider) {
+            prefs().edit().putString("key_$canonical", key).apply()
+        }
+    }
 
     // Default models per provider
     private val defaultModels = mapOf(
@@ -35,6 +53,9 @@ object AgentConfig {
         "openai" to "gpt-4o",
         "minimax" to "MiniMax-M1-80k",
         "google" to "gemini-2.5-flash",
+        "gemini" to "gemini-2.5-flash",
+        "kimi" to "kimi-k2",
+        "moonshot" to "moonshot-v1-auto",
         "openrouter" to "anthropic/claude-sonnet-4-6",
         "deepseek" to "deepseek-chat",
         "mistral" to "mistral-large-latest",
@@ -58,6 +79,9 @@ object AgentConfig {
         "openai" to "https://api.openai.com",
         "minimax" to "https://api.minimax.io/anthropic",
         "google" to "https://generativelanguage.googleapis.com",
+        "gemini" to "https://generativelanguage.googleapis.com",
+        "kimi" to "https://api.kimi.ai",
+        "moonshot" to "https://api.moonshot.cn",
         "openrouter" to "https://openrouter.ai/api",
         "deepseek" to "https://api.deepseek.com",
         "mistral" to "https://api.mistral.ai",
@@ -99,6 +123,20 @@ object AgentConfig {
     /**
      * Build LlmClient.Config from current settings.
      */
+    /**
+     * Build config for a specific provider (used by fallback system).
+     */
+    fun buildConfigForProvider(provider: String): LlmClient.Config {
+        val key = getKeyForProvider(provider)
+        val model = getModelForProvider(provider)
+        val baseUrl = baseUrls[provider] ?: ""
+        val apiType = when (provider) {
+            "anthropic", "minimax" -> "anthropic"
+            else -> "openai"
+        }
+        return LlmClient.Config(apiType, key, model, baseUrl)
+    }
+
     fun toLlmConfig(): LlmClient.Config {
         val provider = activeProvider
         val key = getKeyForProvider(provider)

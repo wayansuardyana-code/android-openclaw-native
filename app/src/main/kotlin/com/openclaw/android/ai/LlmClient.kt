@@ -43,15 +43,46 @@ class LlmClient {
 
     suspend fun chat(config: Config, messages: List<Message>, systemPrompt: String? = null, tools: List<ToolDef>? = null): LlmResponse {
         return withContext(Dispatchers.IO) {
-            try {
-                when (config.provider) {
-                    "anthropic", "minimax" -> chatAnthropic(config, messages, systemPrompt, tools)
-                    else -> chatOpenAI(config, messages, systemPrompt, tools)
-                }
+            // Try primary provider
+            val primary = try {
+                callProvider(config, messages, systemPrompt, tools)
             } catch (e: Exception) {
-                ServiceState.addLog("LLM error: ${e.message}")
+                ServiceState.addLog("LLM primary error: ${e.message}")
                 LlmResponse(content = "", error = e.message)
             }
+
+            // If primary succeeded, return it
+            if (primary.error == null && primary.content.isNotBlank()) return@withContext primary
+
+            // Fallback: try other providers with saved keys
+            val fallbackProviders = listOf("gemini", "google", "anthropic", "openai", "minimax", "openrouter", "deepseek", "groq")
+                .filter { it != config.provider && AgentConfig.getKeyForProvider(it).isNotBlank() }
+
+            if (fallbackProviders.isEmpty()) return@withContext primary // No fallbacks available
+
+            for (fallback in fallbackProviders) {
+                ServiceState.addLog("LLM fallback: trying $fallback")
+                try {
+                    val fbConfig = AgentConfig.buildConfigForProvider(fallback)
+                    val result = callProvider(fbConfig, messages, systemPrompt, tools)
+                    if (result.error == null && result.content.isNotBlank()) {
+                        ServiceState.addLog("LLM fallback: $fallback succeeded")
+                        return@withContext result
+                    }
+                } catch (e: Exception) {
+                    ServiceState.addLog("LLM fallback $fallback failed: ${e.message?.take(60)}")
+                }
+            }
+
+            // All fallbacks failed — return original error
+            primary
+        }
+    }
+
+    private suspend fun callProvider(config: Config, messages: List<Message>, systemPrompt: String?, tools: List<ToolDef>?): LlmResponse {
+        return when (config.provider) {
+            "anthropic", "minimax" -> chatAnthropic(config, messages, systemPrompt, tools)
+            else -> chatOpenAI(config, messages, systemPrompt, tools)
         }
     }
 

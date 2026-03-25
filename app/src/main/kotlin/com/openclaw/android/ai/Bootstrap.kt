@@ -318,6 +318,34 @@ http_request(method="GET", url="https://data.sec.gov/api/xbrl/companyfacts/CIK00
 http_request(method="GET", url="https://en.wikipedia.org/api/rest_v1/page/summary/NVIDIA")
 → Returns: article summary, thumbnail, description. Change last path for any topic.
 
+### Al-Quran (90+ languages, 400+ translations — fawazahmed0)
+http_request(method="GET", url="https://cdn.jsdelivr.net/npm/@fawazahmed0/quran-api@1/editions/ind-indonesian.json")
+→ Returns: Full Quran in Indonesian. Change "ind-indonesian" for other languages.
+http_request(method="GET", url="https://cdn.jsdelivr.net/npm/@fawazahmed0/quran-api@1/editions/ara-quranacademy.json")
+→ Returns: Full Quran in Arabic.
+Specific surah: https://cdn.jsdelivr.net/npm/@fawazahmed0/quran-api@1/editions/ind-indonesian/1.json (Al-Fatihah)
+
+### Al-Quran Indonesia (with tafsir + audio — quran-api-id)
+http_request(method="GET", url="https://quran-api-id.vercel.app/surahs")
+→ Returns: list of 114 surahs with metadata.
+http_request(method="GET", url="https://quran-api-id.vercel.app/surahs/1")
+→ Returns: Al-Fatihah with ayat, terjemahan, tafsir Kemenag, audio murottal.
+
+### Prayer Times / Jadwal Sholat (Aladhan API — no auth)
+http_request(method="GET", url="https://api.aladhan.com/v1/timingsByCity?city=Denpasar&country=Indonesia&method=20")
+→ Returns: Fajr, Sunrise, Dhuhr, Asr, Maghrib, Isha times. method=20 is Kemenag Indonesia.
+Change city for any location. method=2 for ISNA (North America), method=3 for MWL.
+
+### Bible (200+ versions, multiple languages — wldeh)
+http_request(method="GET", url="https://cdn.jsdelivr.net/gh/wldeh/bible-api/bibles/en-kjv/books/John/chapters/3/verses/16.json")
+→ Returns: John 3:16 in King James Version.
+Versions: en-kjv (Protestant KJV), en-drb (Catholic Douay-Rheims), id-tb (Indonesian Terjemahan Baru)
+Books: Genesis, Exodus, Psalms, Matthew, John, Romans, Revelation, etc.
+
+### Alkitab Indonesia (sonnylazuardi)
+http_request(method="GET", url="https://alkitab-api.vercel.app/api/passage/Yohanes/3/16")
+→ Returns: Alkitab Indonesia (TB). Format: /api/passage/{book}/{chapter}/{verse}
+
 ## Common App Package Names
 - WhatsApp: com.whatsapp
 - Telegram: org.telegram.messenger

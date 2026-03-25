@@ -165,7 +165,16 @@ class AgentLoop(private val llmClient: LlmClient) {
                     return "Error: ${response.error}"
                 }
 
-                val content = response.content
+                var content = response.content
+
+                // Strip MiniMax XML wrapper and raw tool_use markup that leaks into responses
+                if (content.contains("</minimax:tool_call>") || content.contains("</invoke>")) {
+                    content = content.replace(Regex("</?(minimax:tool_call|invoke)[^>]*>"), "").trim()
+                }
+                // Strip raw tool_use JSON that MiniMax sometimes sends with = instead of :
+                if (content.contains("\"type=\"tool_use\"") || content.contains("\"type=\\\"tool_use\\\"")) {
+                    content = content.replace(Regex("\\{\"type=\"tool_use\"[^}]*\\}"), "").trim()
+                }
 
                 // Check if it's a tool call (Anthropic format)
                 if (content.startsWith("{") && content.contains("\"type\":\"tool_use\"")) {

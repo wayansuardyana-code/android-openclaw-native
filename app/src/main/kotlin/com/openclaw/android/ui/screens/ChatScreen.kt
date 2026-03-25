@@ -758,12 +758,14 @@ fun MessageBubble(msg: ChatMessage) {
                 android.widget.Toast.makeText(context, "Copied!", android.widget.Toast.LENGTH_SHORT).show()
             }
         ) {
-            Column(modifier = Modifier.padding(10.dp)) {
-                if (label != null) {
-                    Text(label, color = labelColor, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                    Spacer(Modifier.height(2.dp))
+            SelectionContainer {
+                Column(modifier = Modifier.padding(10.dp)) {
+                    if (label != null) {
+                        Text(label, color = labelColor, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                        Spacer(Modifier.height(2.dp))
+                    }
+                    Text(msg.content, color = textColor, fontSize = 13.sp, fontFamily = FontFamily.Monospace, lineHeight = 19.sp)
                 }
-                Text(msg.content, color = textColor, fontSize = 13.sp, fontFamily = FontFamily.Monospace, lineHeight = 19.sp)
             }
         }
     }

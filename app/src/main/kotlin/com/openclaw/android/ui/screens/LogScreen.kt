@@ -117,16 +117,18 @@ fun LogsTab() {
             if (filteredLogs.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No logs", color = Color(0xFF484F58), fontFamily = FontFamily.Monospace, fontSize = 12.sp) }
             } else {
-                LazyColumn(state = listState, modifier = Modifier.padding(8.dp)) {
-                    items(filteredLogs) { log ->
-                        val color = when {
-                            log.lowercase().let { it.contains("error") || it.contains("fail") } -> RED
-                            log.lowercase().let { it.contains("started") || it.contains("success") } -> GREEN
-                            log.lowercase().contains("tool") -> CYAN
-                            log.lowercase().contains("warning") -> Color(0xFFD29922)
-                            else -> Color(0xFFC9D1D9)
+                SelectionContainer {
+                    LazyColumn(state = listState, modifier = Modifier.padding(8.dp)) {
+                        items(filteredLogs) { log ->
+                            val color = when {
+                                log.lowercase().let { it.contains("error") || it.contains("fail") } -> RED
+                                log.lowercase().let { it.contains("started") || it.contains("success") } -> GREEN
+                                log.lowercase().contains("tool") -> CYAN
+                                log.lowercase().contains("warning") -> Color(0xFFD29922)
+                                else -> Color(0xFFC9D1D9)
+                            }
+                            Text(log, color = color, fontFamily = FontFamily.Monospace, fontSize = 10.sp, lineHeight = 14.sp, modifier = Modifier.padding(vertical = 1.dp))
                         }
-                        Text(log, color = color, fontFamily = FontFamily.Monospace, fontSize = 10.sp, lineHeight = 14.sp, modifier = Modifier.padding(vertical = 1.dp))
                     }
                 }
             }

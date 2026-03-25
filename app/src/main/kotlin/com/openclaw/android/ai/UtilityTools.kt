@@ -856,6 +856,11 @@ object UtilityTools {
     }
 
     private fun runShell(command: String): String {
+        // Prevent absurdly long commands (LLM hallucination protection)
+        if (command.length > 2000) {
+            return """{"error":"Command too long (${command.length} chars, max 2000). Simplify the command."}"""
+        }
+
         val blocklist = listOf(
             "rm -rf /", "rm -r /", "mkfs", "dd if=", ":(){ :|:&", "format",
             // Block data exfiltration

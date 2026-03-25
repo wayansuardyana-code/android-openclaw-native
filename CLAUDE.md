@@ -82,13 +82,13 @@ POST /agent/chat                  # {message, provider, apiKey, model, baseUrl} 
 ```
 
 ## AI Agent System
-- LlmClient supports Anthropic, OpenAI, Google, MiniMax, OpenRouter, Ollama, custom APIs
+- LlmClient supports Anthropic, OpenAI, Google Gemini, MiniMax, Kimi/Moonshot, OpenRouter, DeepSeek, Groq, xAI, Mistral, Together, Fireworks, Ollama, custom APIs
 - AgentLoop implements tool-calling loop: user msg → LLM → tool call → execute → loop → final response
 - 8 Android tools exposed to LLM: read_screen, tap, swipe, type_text, press_back, press_home, open_app, read_notifications
 - POST /agent/chat endpoint accepts {message, provider, apiKey, model, baseUrl}
 - Max 10 tool-calling steps per agent run
 
-## LLM Tools (45 total)
+## LLM Tools (49 total)
 ### Android Device Tools (18)
 android_read_screen, find_element, read_region,
 android_tap, android_long_press, android_swipe, android_type_text,
@@ -99,12 +99,13 @@ android_set_brightness, android_get_clipboard, android_set_clipboard,
 android_wifi_toggle, android_read_notifications,
 take_screenshot, shizuku_command
 
-### Utility Tools (17)
+### Utility Tools (19)
 run_shell_command, web_scrape, web_search, calculator,
 read_file, write_file, list_files, generate_csv, generate_xlsx, generate_pdf,
 http_request, spawn_sub_agent, list_sub_agents,
 read_workspace_file, update_workspace_file,
-send_telegram_message, send_telegram_photo
+send_telegram_message, send_telegram_photo, send_telegram_document,
+analyze_screenshot
 
 ### Service Tools (7) — require API tokens
 github_api, vercel_api, supabase_query, google_workspace, authenticated_api,
@@ -153,8 +154,14 @@ This pattern ensures tasks are verifiable, results are communicated, and knowled
 - Shizuku integration declared but not yet connected
 - nodejs-mobile integration optional — Kotlin-native AI agent works standalone
 - APK served via `python3 -m http.server 8899` on VPS for download
-- v1.9.1 is latest build
-- v1.9.1: 45 LLM tools (18 Android device + 17 utility + 7 service + 3 Python)
+- v2.2.0 is latest build
+- v2.2.0: 49 LLM tools (18 Android device + 19 utility + 7 service + 3 Python)
+- v2.2.0: 15 LLM providers including Kimi/Moonshot, LLM fallback system
+- v2.2.0: analyze_screenshot (Gemini Vision) tool added
+- v2.2.0: send_telegram_document tool added
+- v2.2.0: HeartbeatService (autonomous 30-min loop)
+- v2.2.0: Live narration + mid-task feedback
+- v2.2.0: Auto-nudge tool calling
 - v1.9.1: Auto-learn (skills.md auto-populated after 5+ step tasks)
 - v1.9.1: ACT → OBSERVE → REPORT → LEARN automation pattern
 - v1.9.1: App interaction guide in TOOLS.md
@@ -201,9 +208,44 @@ This pattern ensures tasks are verifiable, results are communicated, and knowled
 - list_sub_agents: check running/completed agents
 
 ## ModelRegistry
-- 50+ models across 13 providers
-- Per-provider model dropdown (no typing)
+- 50+ models across 15 providers
+- Per-provider model dropdown grouped by provider (no typing)
+- Providers: Anthropic, OpenAI, Google Gemini, MiniMax, Kimi/Moonshot, OpenRouter, DeepSeek, Groq, xAI, Mistral, Together, Fireworks, Ollama, custom
 - Mirrors OpenClaw ecosystem model support
+
+## LLM Fallback System
+- If primary provider fails (network error, quota exceeded, invalid key), agent auto-retries with next configured provider
+- Fallback order: based on which providers have saved API keys in AgentConfig
+- Fallback is silent — user sees final response, not intermediate errors
+- Ensures high availability even when one provider is down or rate-limited
+
+## Gemini Vision Connector (analyze_screenshot)
+- Tool: `analyze_screenshot` — takes a screenshot, encodes as base64, sends to Gemini Vision API
+- Uses Gemini 1.5 Flash (free tier) or Pro for image understanding
+- Agent can "see" the screen visually: icons, colors, images, layout — not just accessibility tree text
+- Flow: take_screenshot → base64 encode → Gemini generateContent with inline image → return description
+- Enables: reading CAPTCHAs, identifying visual UI elements, describing images in files
+
+## HeartbeatService
+- Runs every 30 minutes as a foreground service loop
+- Autonomously: reviews failure log, updates skills, executes scheduled tasks
+- Scheduled tasks stored in Room DB (cron-like expressions or natural language)
+- On each tick: reads memory.md + skills.md → sends to LLM → executes any due tasks → logs results
+- Can be paused/resumed from Dashboard
+- Enables: "every morning at 8, check weather and send to Telegram" style automations
+
+## Live Narration + Mid-Task Feedback
+- Agent sends a chat message at each major step: "Opening Chrome…", "Searching for…", "Done."
+- User can send a message while agent is running — agent reads it as feedback on next iteration
+- Mid-task messages are injected into the agent's context as high-priority instructions
+- Prevents silent failures — user always knows what the agent is doing
+- Feedback channel: same chat UI, Telegram bot also supported
+
+## Auto-Nudge Tool Calling
+- If LLM returns a plain text response when a tool call was expected, agent auto-nudges: "Please use a tool."
+- Nudge includes reminder of available tools and expected format
+- Max 3 nudges before agent gives up and reports failure
+- Prevents agent getting stuck in "thinking mode" without acting
 
 ## Dashboard Hardware Monitor
 - Real-time: RAM usage/total, storage used/free, battery level

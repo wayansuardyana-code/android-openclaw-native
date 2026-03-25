@@ -1,77 +1,49 @@
-# OpenClaw Android Native
+# OpenClaw Android
 
 Autonomous AI agent that controls your Android phone through natural language.
 
----
+## What it does
+
+OpenClaw is a native Android app that gives an AI agent full control of your device — open apps, navigate UI, read screens, type text, manage files, browse the web, and automate multi-step tasks. Think of it as an AI assistant that can actually *do* things on your phone, not just answer questions.
 
 ## Features
 
-- **45 LLM tools** — screen control, tap/swipe/type, media, volume, clipboard, brightness, notifications, files, web search, web scrape, HTTP requests, APIs, SSH, Python runtime
-- **Auto-learn** — agent saves successful task patterns to `skills.md` automatically after 5+ step tasks
-- **Multi-gateway** — respond via in-app chat, Telegram bot, or file export
-- **Workspace files** — `SOUL.md`, `USER.md`, `memory.md`, `skills.md`, `TOOLS.md` — agent evolves over time
-- **13 LLM providers** — Anthropic, OpenAI, Google, MiniMax, OpenRouter, Ollama, Groq, DeepSeek, xAI, Mistral, Together AI, Fireworks, Custom
-- **Token-efficient** — compact screen reading (~50 tokens per element search)
-
----
+- **49 LLM tools** — screen control, media, volume, clipboard, notifications, files, web, APIs
+- **15 LLM providers** — Anthropic, OpenAI, Google Gemini, MiniMax, Kimi, OpenRouter, DeepSeek, Groq, xAI, Mistral, Together, Fireworks, Ollama, Moonshot, custom
+- **LLM fallback** — if primary provider fails, auto-tries others with saved keys
+- **Vision (Gemini)** — agent can "see" the screen via screenshot + Gemini Vision API
+- **Auto-learn** — successful multi-step tasks saved as reusable skills
+- **Autonomous heartbeat** — agent runs every 30 min without being asked
+- **Self-improvement** — failures logged, reviewed, skills updated
+- **Live narration** — agent tells you what it's doing at each step
+- **Mid-task feedback** — send messages while agent is working to adjust its approach
+- **Telegram bot** — control your phone remotely via Telegram
+- **Multi-gateway** — respond via chat, Telegram, or file export
+- **Workspace files** — SOUL.md, USER.md, memory.md, skills.md evolve over time
 
 ## Requirements
 
 - Android 7.0+ (API 24), optimized for Android 14
 - Accessibility Service enabled
-- LLM API key (any supported provider)
-
----
+- Any LLM API key (Gemini free tier works)
 
 ## Install
 
-1. Download APK from [Releases](../../releases)
-2. Install → Open → Settings → Add LLM provider (tap +) → Paste API key
-3. Enable Accessibility Service when prompted
-4. Chat — AI controls your phone
-
-**Updates:** Settings → Check Updates → auto-downloads and installs.
-
----
+Download APK from [GitHub Releases](../../releases), install, enable Accessibility Service in Settings.
 
 ## Architecture
 
-- **Kotlin + Jetpack Compose** — native Android UI
-- **AccessibilityService** — screen reading and device control across all apps
-- **Ktor embedded server** — bridge API on localhost:18790
-- **Room SQLite** — chat history, memories, tasks, connectors, agent sessions
-- **Foreground Service** — always-on, survives screen off
-
----
-
-## Tool Categories
-
-| Category | Count | Examples |
-|---|---|---|
-| Android Device | 18 | read_screen, tap, swipe, type, open_app, media, volume, brightness, clipboard |
-| Utility | 17 | shell, web_search, web_scrape, http_request, files, CSV/XLSX/PDF, sub_agent |
-| Service | 7 | GitHub, Vercel, Supabase, Google Workspace, SSH, Postgres |
-| Python | 3 | install_python, run_python, pip_install |
-
----
-
-## Automation Pattern
-
-Tasks follow: **ACT → OBSERVE → REPORT → LEARN**
-
-1. ACT — execute tool calls
-2. OBSERVE — verify results on screen
-3. REPORT — push notification or chat reply
-4. LEARN — append skill summary to `skills.md` if task had 5+ steps
-
----
+- Kotlin + Jetpack Compose
+- AccessibilityService for full device control
+- Room SQLite database (chat, memory, tasks)
+- Ktor embedded HTTP server (bridge API)
+- Foreground Service (always-on)
+- HeartbeatService (autonomous 30-min loop)
 
 ## Current Version
 
-**v1.9.1** — 45 tools, auto-learn, app interaction guide (TOOLS.md), MiniMax XML cleanup
-
----
+v2.2.0 — 49 tools, 15 providers, LLM fallback, vision, auto-learn, autonomous heartbeat
 
 ## License
 
-Private project.
+MIT

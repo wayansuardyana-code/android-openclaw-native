@@ -63,6 +63,39 @@ Listed below as upcoming phases.
 
 ---
 
+## Phase 8.5: Service Connectors Expansion (v2.3)
+
+### 8.5.1 Search APIs (replace unreliable DuckDuckGo)
+- Brave Search API — dedicated tool, 2K/month free
+- Serper.dev — Google SERP JSON, 2500 credits free
+- Exa API — neural search, research-grade
+- Firecrawl — web scraping as a service, structured data
+
+### 8.5.2 Communication Gateways
+- Discord Bot — bot token auth (no OAuth needed)
+- Slack Bot — xoxb- token auth
+- WhatsApp (future) — needs Baileys or WhatsApp Cloud API
+- Email (SMTP) — send emails via configured SMTP server
+
+### 8.5.3 Cloud Services
+- Cloudflare Workers/R2 — API token
+- AWS S3 — access key + secret
+- Firebase — service account JSON
+
+### 8.5.4 OAuth2 Services (Phase 5 dependency)
+- Google Workspace — OAuth2 flow via Google Sign-In
+- Discord OAuth2 — for user-level access
+- Slack OAuth2 — for workspace-level access
+- Notion API — integration token
+
+### Implementation Notes
+- All simple token-based services can use existing `authenticated_api` tool
+- Dedicated tools only needed for complex APIs (multi-step, pagination, etc.)
+- User adds token in Settings → Services → "+"
+- Agent uses `http_request` with headers for any REST API not yet having a dedicated tool
+
+---
+
 ## Phase 9: Better Vision — How Agent Sees the Screen (v2.2)
 
 ### Research Sources
@@ -211,6 +244,11 @@ Expected: supabase_query tool calls PostgREST API
 | Supabase | READY (untested) | Settings → "+" → supabase → paste anon key + URL |
 | GitHub | READY (untested) | Settings → "+" → github → paste PAT |
 | Google Workspace | BLOCKED | Waiting for OAuth2 credentials from Wayan |
+| Brave Search | PLANNED (Phase 8.5) | Settings → "+" → brave → paste API key |
+| Firecrawl | PLANNED (Phase 8.5) | Settings → "+" → firecrawl → paste API key |
+| Exa | PLANNED (Phase 8.5) | Settings → "+" → exa → paste API key |
+| Discord | PLANNED (Phase 8.5) | Settings → "+" → discord → paste bot token |
+| Slack | PLANNED (Phase 8.5) | Settings → "+" → slack → paste xoxb- token |
 | Context7 | NOT YET | Need to add as default API connector |
 | ClawhHub | NOT YET | Need to add as default API connector |
 | SSH (VPS) | READY | Settings → "+" → ssh → host/user/password |

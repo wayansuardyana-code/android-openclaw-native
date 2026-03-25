@@ -233,19 +233,17 @@ class LlmClient {
             }
         }
 
-        val isGoogle = config.baseUrl.contains("googleapis.com")
         val url = when {
-            isGoogle -> "${config.baseUrl}/v1beta/openai/chat/completions"
+            config.baseUrl.contains("googleapis.com") ->
+                "${config.baseUrl}/v1beta/openai/chat/completions"
             else -> "${config.baseUrl}/v1/chat/completions"
         }
 
         val response = client.post(url) {
             contentType(ContentType.Application.Json)
-            if (isGoogle) {
-                // Google AI Studio uses API key as query parameter
-                url { parameters.append("key", config.apiKey) }
-            } else if (config.apiKey.isNotBlank()) {
-                // Standard Bearer token auth (skip for no-auth providers)
+            // All OpenAI-compatible endpoints (including Google) use Bearer token
+            // Skip auth only for no-auth providers (Pollinations)
+            if (config.apiKey.isNotBlank()) {
                 header("Authorization", "Bearer ${config.apiKey}")
             }
             setBody(body.toString())
@@ -266,9 +264,19 @@ class LlmClient {
         }
 
         if (respText.isBlank()) return LlmResponse(content = "", error = "Empty response from API")
-        if (!respText.trimStart().startsWith("{")) return LlmResponse(content = "", error = "Not JSON: ${respText.take(150)}")
+        val trimmedResp = respText.trimStart()
+        if (!trimmedResp.startsWith("{") && !trimmedResp.startsWith("[")) return LlmResponse(content = "", error = "Not JSON: ${respText.take(150)}")
+
+        // Handle JSON array responses (some providers wrap errors in arrays)
+        val jsonStr = if (trimmedResp.startsWith("[")) {
+            try {
+                val arr = gson.fromJson(trimmedResp, JsonArray::class.java)
+                if (arr.size() > 0 && arr[0].isJsonObject) arr[0].asJsonObject.toString() else trimmedResp
+            } catch (_: Exception) { trimmedResp }
+        } else trimmedResp
+
         val respJson = try {
-            val reader = com.google.gson.stream.JsonReader(java.io.StringReader(respText))
+            val reader = com.google.gson.stream.JsonReader(java.io.StringReader(jsonStr))
             reader.isLenient = true
             gson.fromJson<JsonObject>(reader, JsonObject::class.java)
         } catch (e: Exception) { return LlmResponse(content = "", error = "Parse error: ${e.message?.take(100)}") }

@@ -516,7 +516,13 @@ ${if (user.isNotBlank()) "\n--- USER PROFILE ---\n$user" else ""}
 ${if (identity.isNotBlank()) "\n--- IDENTITY ---\n$identity" else ""}
 ${if (memory.isNotBlank()) "\n--- MEMORY ---\n$memory" else ""}
 ${if (tieredMemory.isNotBlank()) "\n$tieredMemory" else ""}
-${if (customPrompt.isNotBlank()) "\n--- CUSTOM INSTRUCTIONS ---\n$customPrompt" else ""}"""
+${if (customPrompt.isNotBlank()) "\n--- CUSTOM INSTRUCTIONS ---\n$customPrompt" else ""}
+
+--- SYSTEM INFO ---
+You are running on: provider=$activeProvider, model=${config.model}
+Version: ${com.openclaw.android.BuildConfig.VERSION_NAME}
+Device: ${android.os.Build.MODEL} (Android ${android.os.Build.VERSION.SDK_INT})
+When user asks "what model" or "what LLM", answer with the above info."""
 
                 val response = agentLoop.run(config, actualMessage + fileContext, systemPrompt)
                 ChatState.addMessage(ChatMessage("assistant", response))

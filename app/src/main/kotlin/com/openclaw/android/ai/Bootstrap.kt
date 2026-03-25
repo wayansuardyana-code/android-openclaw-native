@@ -273,6 +273,117 @@ pip_install(packages="pandas numpy scipy matplotlib")
 run_python(code="import pandas as pd; ...")
 ```
 
+### Document Creation (DOCX — Word documents)
+Create professional Word documents with formatting, tables, images.
+```
+pip_install(packages="python-docx")
+run_python(code='''
+from docx import Document
+from docx.shared import Inches, Pt, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+doc = Document()
+# Title
+title = doc.add_heading("Report Title", level=0)
+# Paragraph with formatting
+p = doc.add_paragraph()
+run = p.add_run("Bold text")
+run.bold = True
+run.font.size = Pt(12)
+# Table
+table = doc.add_table(rows=3, cols=3, style="Table Grid")
+table.cell(0,0).text = "Name"
+table.cell(0,1).text = "Value"
+# Save
+doc.save("/data/data/com.openclaw.android/files/documents/report.docx")
+print("Saved: report.docx")
+''')
+```
+
+### Presentation Creation (PPTX — PowerPoint)
+Create presentations with slides, layouts, text, images.
+```
+pip_install(packages="python-pptx")
+run_python(code='''
+from pptx import Presentation
+from pptx.util import Inches, Pt
+from pptx.enum.text import PP_ALIGN
+
+prs = Presentation()
+# Title slide
+slide = prs.slides.add_slide(prs.slide_layouts[0])
+slide.shapes.title.text = "Presentation Title"
+slide.placeholders[1].text = "Subtitle"
+# Content slide
+slide2 = prs.slides.add_slide(prs.slide_layouts[1])
+slide2.shapes.title.text = "Key Points"
+body = slide2.placeholders[1]
+body.text = "Point 1: ..."
+body.text_frame.add_paragraph().text = "Point 2: ..."
+# Save
+prs.save("/data/data/com.openclaw.android/files/documents/presentation.pptx")
+print("Saved: presentation.pptx")
+''')
+```
+
+### Spreadsheet (XLSX — advanced Excel with formulas)
+Create Excel files with formulas, formatting, charts. Upgrade from generate_xlsx.
+```
+pip_install(packages="openpyxl")
+run_python(code='''
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+wb = Workbook()
+ws = wb.active
+ws.title = "Report"
+# Headers with formatting
+headers = ["Name", "Value", "Change"]
+for col, h in enumerate(headers, 1):
+    cell = ws.cell(row=1, column=col, value=h)
+    cell.font = Font(bold=True, color="FFFFFF")
+    cell.fill = PatternFill("solid", fgColor="002A3A")
+# Data with formulas
+ws["A2"] = "Bitcoin"
+ws["B2"] = 107949
+ws["C2"] = "=B2*0.041"  # 4.1% change
+# Auto-width columns
+for col in ws.columns:
+    ws.column_dimensions[col[0].column_letter].width = 15
+wb.save("/data/data/com.openclaw.android/files/documents/report.xlsx")
+print("Saved: report.xlsx")
+''')
+```
+
+### PDF Creation (advanced — with reportlab)
+Create professional PDFs with layouts, tables, charts.
+```
+pip_install(packages="reportlab")
+run_python(code='''
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+
+doc = SimpleDocTemplate("/data/data/com.openclaw.android/files/documents/report.pdf", pagesize=A4)
+styles = getSampleStyleSheet()
+elements = []
+elements.append(Paragraph("Report Title", styles["Title"]))
+elements.append(Spacer(1, 12))
+# Table
+data = [["Item", "Price", "Qty"], ["Widget", "$10", "5"], ["Gadget", "$25", "2"]]
+t = Table(data)
+t.setStyle(TableStyle([
+    ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#002A3A")),
+    ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+    ("GRID", (0,0), (-1,-1), 1, colors.grey),
+]))
+elements.append(t)
+doc.build(elements)
+print("Saved: report.pdf")
+''')
+```
+
 ## Search & Act Pattern (CORE SKILL — use for ANY app)
 This is the universal pattern for doing things in apps. Works for Play Store, Shopee, YouTube, GoFood, Tokopedia, Instagram, etc.
 

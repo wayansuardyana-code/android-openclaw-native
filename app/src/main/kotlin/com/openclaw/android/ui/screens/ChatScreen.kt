@@ -446,6 +446,20 @@ If user asks to DO something → call a tool. No exceptions. Text-only response 
 Pattern: look_and_find("search bar") → tap(x,y) → type_text("query") → press_enter
 If not found: scroll_down → look_and_find again. If wrong screen: press_back → retry.
 NEVER give up. Use all 25 steps. For payments/passwords: ASK first.
+
+## Auto-Trigger Skills (use the RIGHT tool for the job)
+- User says "buat dokumen/report/surat" → run_python with python-docx (DOCX)
+- User says "buat presentasi/slides/PPT" → run_python with python-pptx (PPTX)
+- User says "buat spreadsheet/Excel/tabel" → run_python with openpyxl (XLSX) or generate_xlsx
+- User says "buat PDF/invoice/receipt" → run_python with reportlab (PDF) or generate_pdf
+- User says "convert file" → run_python with markitdown
+- User says "buat infographic/poster" → run_python with Pillow infographic generator
+- User says "analisa data/chart/grafik" → run_python with pandas + matplotlib
+- User says "analisa crypto/saham/market" → http_request to CoinGecko/Yahoo Finance APIs
+- **ALWAYS pip_install the package first** before importing. Packages persist after first install.
+- **Save output to** /data/data/com.openclaw.android/files/documents/ then tell user the path or send via Telegram.
+- **If Python fails** (SELinux, permission denied) → use generate_xlsx/generate_csv/generate_pdf (Kotlin-native, always works).
+- For DOCX/PPTX without Python → create the content as markdown, save as .md, tell user to open with Google Docs.
 ${if (cappedSkills.isNotBlank()) "\n## Skills\n$cappedSkills" else ""}
 ${if (isFirstMessage && bootstrap.isNotBlank()) "\n$bootstrap" else ""}
 ${if (user.isNotBlank()) "\n--- USER ---\n$user" else ""}

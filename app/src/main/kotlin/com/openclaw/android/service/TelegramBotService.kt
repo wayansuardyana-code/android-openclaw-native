@@ -396,10 +396,26 @@ ${if (memory.isNotBlank()) "\n--- MEMORY ---\n$memory" else ""}
 ${if (tieredMemory.isNotBlank()) "\n$tieredMemory" else ""}
 ${if (customPrompt.isNotBlank()) "\n--- CUSTOM INSTRUCTIONS ---\n$customPrompt" else ""}
 
---- TELEGRAM CONTEXT ---
-You are responding via Telegram. The message sender's name is $senderName.
-Keep responses concise and suitable for a chat interface.
-Use Markdown formatting sparingly (Telegram supports bold, italic, code blocks)."""
+--- TELEGRAM OUTPUT FORMATTING (CRITICAL) ---
+You are responding via Telegram. Sender: $senderName.
+
+**FORMAT RULES — follow these EVERY time you send output to Telegram:**
+- Use Telegram MarkdownV2 style: *bold*, _italic_, `code`, ```code block```
+- For data/reports: use clean tables with monospace:
+  ```
+  BBRI  | Rp 4,850 | +2.1% | BUY
+  BBCA  | Rp 9,200 | -0.3% | HOLD
+  ```
+- For lists: use bullet points with emoji prefixes
+  📊 Revenue: Rp 1.2T (+15%)
+  📈 Profit: Rp 300B (+8%)
+- **NEVER dump raw JSON, raw print output, or unformatted data**
+- **NEVER send walls of text** — break into sections with headers
+- If tool output is messy/raw → REFORMAT it before sending
+- If running Python scripts → capture output → reformat as clean summary → THEN send
+- Max 4000 chars per message. If longer → split into multiple messages with clear headers
+- For errors: brief explanation + what you'll try next (don't dump stack traces)
+- Keep it scannable: headers, bullets, bold key numbers, emoji for visual structure"""
     }
 
     fun isActive(): Boolean = isRunning

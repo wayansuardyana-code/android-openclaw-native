@@ -34,6 +34,7 @@ class AgentLoop(private val llmClient: LlmClient) {
 
     private val gson = Gson()
     private val maxSteps = 25
+    private val MAX_EMBEDDED_TOOLS = 5  // Cap embedded tool calls per run
 
     /** Parse JSON leniently — LLM output is often not strictly valid */
     private fun <T> parseLenient(json: String, clazz: Class<T>): T {
@@ -147,6 +148,7 @@ class AgentLoop(private val llmClient: LlmClient) {
 
         val tools = AndroidTools.getToolDefinitions()
         var step = 0
+        var embeddedToolCount = 0
         val toolsUsed = mutableListOf<String>() // Track for auto-learn
 
         try {
@@ -252,11 +254,17 @@ class AgentLoop(private val llmClient: LlmClient) {
                 }
 
                 // Check if text response contains an embedded tool call (MiniMax/Pollinations pattern)
-                // e.g. {"type":"tool_use","name":"android_tap","input":{"x":630,"y":175}}
-                val embeddedToolMatch = Regex("\"name\"\\s*:\\s*\"(android_tap|android_swipe|android_type_text|android_press_back|android_press_home|android_press_enter|android_open_app|look_and_find|look_and_describe|scroll_down|scroll_up|android_read_screen|find_element|take_screenshot|analyze_screenshot|analyze_screen_with_som|tap_som_element)\"").find(content)
+                // SECURITY: Require "type":"tool_use" or "type":"function" marker to prevent
+                // prompt injection from scraped web content or file data triggering arbitrary tool calls.
+                // Also cap embedded tool executions to prevent infinite loops.
+                val hasToolUseMarker = content.contains("\"type\"") && (content.contains("tool_use") || content.contains("function"))
+                val embeddedToolMatch = if (hasToolUseMarker && embeddedToolCount < MAX_EMBEDDED_TOOLS) {
+                    Regex("\"name\"\\s*:\\s*\"(android_tap|android_swipe|android_type_text|android_press_back|android_press_home|android_press_enter|android_open_app|look_and_find|look_and_describe|scroll_down|scroll_up|android_read_screen|find_element|take_screenshot|analyze_screenshot|analyze_screen_with_som|tap_som_element)\"").find(content)
+                } else null
                 if (embeddedToolMatch != null) {
                     val toolName = embeddedToolMatch.groupValues[1]
-                    ServiceState.addLog("Agent: found embedded tool call '$toolName' in text response — executing")
+                    embeddedToolCount++
+                    ServiceState.addLog("Agent: found embedded tool call '$toolName' in text response — executing ($embeddedToolCount/$MAX_EMBEDDED_TOOLS)")
                     try {
                         // Extract input/parameters from the embedded JSON
                         val inputJson = JsonObject()

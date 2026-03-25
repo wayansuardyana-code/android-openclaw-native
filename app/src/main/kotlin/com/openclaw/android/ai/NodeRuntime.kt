@@ -113,8 +113,16 @@ object NodeRuntime {
     /**
      * Run a Node.js script.
      */
+    private val codeBlocklist = listOf("agent_config", "shared_prefs", "databases/", ".db", "/data/data/", "/data/user/")
+
     fun execute(code: String, timeout: Long = 60): String {
         if (!isInstalled()) return """{"error":"Node.js not installed. Use install_node tool first."}"""
+        // Security: block access to sensitive app directories
+        val codeLower = code.lowercase()
+        if (codeBlocklist.any { codeLower.contains(it) }) {
+            return """{"error":"Code blocked: cannot access app internal data directories"}"""
+        }
+        if (code.length > 10000) return """{"error":"Code too long (max 10000 chars)"}"""
 
         val scriptFile = File(nodeDir(), "temp_script.js")
         scriptFile.writeText(code)

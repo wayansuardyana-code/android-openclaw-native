@@ -210,6 +210,14 @@ fun TerminalTab() {
             IconButton(onClick = {
                 if (input.isBlank()) return@IconButton
                 val cmd = input.trim(); input = ""
+                // Security: block access to sensitive app data
+                val blocked = listOf("shared_prefs", "databases/", "agent_config", "/data/data/", "/data/user/")
+                val cmdLower = cmd.lowercase()
+                if (blocked.any { cmdLower.contains(it) }) {
+                    output.add("$ $cmd" to CYAN)
+                    output.add("Blocked: cannot access app internal data" to RED)
+                    return@IconButton
+                }
                 output.add("$ $cmd" to CYAN)
                 scope.launch {
                     val result = withContext(Dispatchers.IO) {

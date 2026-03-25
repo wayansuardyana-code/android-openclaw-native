@@ -219,20 +219,19 @@ object LinuxEnvironment {
     }
 
     private fun runCmd(cmd: String, timeoutSecs: Long = 60): String {
-        val env = arrayOf(
-            "HOME=${baseDir().absolutePath}",
-            "PROOT_TMP_DIR=${baseDir().absolutePath}/tmp",
-            "PROOT_NO_SECCOMP=1"  // Required on some Android devices
-        )
         // Ensure tmp dir exists
         File(baseDir(), "tmp").mkdirs()
 
         val process = ProcessBuilder("sh", "-c", cmd)
             .redirectErrorStream(true)
             .directory(baseDir())
+            .also { pb ->
+                pb.environment()["HOME"] = baseDir().absolutePath
+                pb.environment()["PROOT_TMP_DIR"] = File(baseDir(), "tmp").absolutePath
+                pb.environment()["PROOT_NO_SECCOMP"] = "1"  // Required on some Android devices
+            }
             .start()
 
-        // Set environment via reflection or pass via sh -c
         val output = BufferedReader(InputStreamReader(process.inputStream)).readText().take(4000)
         val finished = process.waitFor(timeoutSecs, java.util.concurrent.TimeUnit.SECONDS)
         if (!finished) { process.destroyForcibly(); return "(timed out after ${timeoutSecs}s)" }

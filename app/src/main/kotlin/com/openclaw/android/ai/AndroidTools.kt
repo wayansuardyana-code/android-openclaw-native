@@ -267,6 +267,19 @@ object AndroidTools {
                 "required" to listOf("url")
             )
         ),
+        ToolDef(
+            name = "explore_app",
+            description = "Explore an unfamiliar app to learn its UI layout BEFORE attempting tasks. Opens the app, reads each screen, maps interactive elements and navigation patterns. Saves a knowledge map to notes. Use BEFORE interacting with an app you haven't used before. Returns a JSON map of the app's screens, buttons, navigation, and key elements.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "package_name" to mapOf("type" to "string", "description" to "App package name to explore (e.g. com.shopee.id)"),
+                    "max_screens" to mapOf("type" to "number", "description" to "Max screens to explore (default 5, max 10)"),
+                    "goal" to mapOf("type" to "string", "description" to "Optional: what you want to learn (e.g. 'find search bar', 'locate settings')")
+                ),
+                "required" to listOf("package_name")
+            )
+        ),
     )
 
     suspend fun executeTool(name: String, args: JsonObject): String {
@@ -696,6 +709,108 @@ object AndroidTools {
                     context.startActivity(intent)
                     """{"success":true,"url":${com.google.gson.Gson().toJson(url)}}"""
                 }
+                "explore_app" -> {
+                    val pkgName = args.get("package_name").asString
+                    val maxScreens = (args.get("max_screens")?.asInt ?: 5).coerceIn(1, 10)
+                    val goal = args.get("goal")?.asString ?: ""
+
+                    val reader = ScreenReaderService.instance
+                        ?: return """{"error":"Accessibility service not enabled"}"""
+
+                    // Open the app
+                    val appContext = com.openclaw.android.OpenClawApplication.instance
+                    val launchIntent = appContext.packageManager.getLaunchIntentForPackage(pkgName)
+                        ?: return """{"error":"App not installed: $pkgName"}"""
+                    launchIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    appContext.startActivity(launchIntent)
+                    delay(2000) // Wait for app to load
+
+                    val exploredScreens = mutableListOf<Map<String, Any>>()
+                    val visitedSignatures = mutableSetOf<String>()
+
+                    for (screen in 0 until maxScreens) {
+                        // Read current screen
+                        val screenData = reader.readScreen()
+                        val screenText = screenData.toString()
+
+                        // Create a signature from key elements to detect duplicate screens
+                        val signature = screenText.take(200).hashCode().toString()
+                        if (signature in visitedSignatures) {
+                            ServiceState.addLog("[Explore] Screen $screen duplicate, skipping")
+                            break
+                        }
+                        visitedSignatures.add(signature)
+
+                        // Parse interactive elements
+                        val rootNode = reader.rootInActiveWindow
+                        val elements = mutableListOf<Map<String, Any?>>()
+                        if (rootNode != null) {
+                            collectExploreElements(rootNode, elements, 0)
+                            try { rootNode.recycle() } catch (_: Exception) {}
+                        }
+
+                        val screenInfo = mapOf(
+                            "screen_index" to screen,
+                            "package" to pkgName,
+                            "element_count" to elements.size,
+                            "interactive_elements" to elements.take(40),
+                            "raw_summary" to screenText.take(500)
+                        )
+                        exploredScreens.add(screenInfo)
+                        ServiceState.addLog("[Explore] Screen $screen: ${elements.size} elements found")
+
+                        // Navigate to next screen (scroll down or tap first tab/menu)
+                        if (screen < maxScreens - 1) {
+                            // Try scrolling down to discover more content
+                            val reader2 = ScreenReaderService.instance ?: break
+                            reader2.swipe(540f, 1500f, 540f, 500f, 300)
+                            delay(1000)
+                        }
+                    }
+
+                    // Save exploration result as a note
+                    val notesDir = java.io.File(
+                        android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS),
+                        "OpenClaw/notes"
+                    )
+                    notesDir.mkdirs()
+                    val appName = pkgName.substringAfterLast(".")
+                    val noteFile = java.io.File(notesDir, "app_map_$appName.md")
+
+                    val noteContent = buildString {
+                        appendLine("# App Map: $pkgName")
+                        appendLine("Explored: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date())}")
+                        if (goal.isNotBlank()) appendLine("Goal: $goal")
+                        appendLine()
+                        exploredScreens.forEach { screen ->
+                            appendLine("## Screen ${screen["screen_index"]}")
+                            appendLine("Elements: ${screen["element_count"]}")
+                            @Suppress("UNCHECKED_CAST")
+                            val elems = screen["interactive_elements"] as? List<Map<String, Any?>> ?: emptyList()
+                            elems.forEach { el ->
+                                val label = el["text"] ?: el["description"] ?: el["class_short"] ?: "?"
+                                val role = el["role"] ?: ""
+                                val cx = el["cx"]
+                                val cy = el["cy"]
+                                appendLine("- [$role] \"$label\" @ ($cx, $cy)")
+                            }
+                            appendLine()
+                        }
+                    }
+                    noteFile.writeText(noteContent)
+
+                    // Press back to return to previous state
+                    ScreenReaderService.instance?.pressBack()
+
+                    val result = mapOf(
+                        "success" to true,
+                        "app" to pkgName,
+                        "screens_explored" to exploredScreens.size,
+                        "note_saved" to noteFile.absolutePath,
+                        "screens" to exploredScreens
+                    )
+                    gson.toJson(result)
+                }
                 else -> {
                     val utilResult = UtilityTools.executeTool(name, args)
                     if (utilResult.contains("Unknown tool")) {
@@ -802,6 +917,60 @@ object AndroidTools {
             val child = node.getChild(i) ?: continue
             collectInteractiveElements(child, out, screenW, screenH, maxElements, depth + 1)
             child.recycle()
+        }
+    }
+
+    /**
+     * Walk accessibility tree for explore_app — collects interactive elements with roles and coordinates.
+     */
+    private fun collectExploreElements(
+        node: AccessibilityNodeInfo,
+        out: MutableList<Map<String, Any?>>,
+        depth: Int
+    ) {
+        if (out.size >= 60 || depth > 15) return
+
+        val bounds = Rect()
+        node.getBoundsInScreen(bounds)
+
+        val text = node.text?.toString()?.take(50) ?: ""
+        val desc = node.contentDescription?.toString()?.take(50) ?: ""
+        val className = node.className?.toString() ?: ""
+        val classShort = className.substringAfterLast(".")
+
+        val isInteractive = node.isClickable || node.isCheckable || node.isEditable || node.isScrollable
+
+        if (isInteractive && bounds.width() > 10 && bounds.height() > 10) {
+            val role = when {
+                node.isEditable -> "input"
+                classShort.contains("Button", true) -> "button"
+                classShort.contains("EditText", true) -> "input"
+                classShort.contains("Image", true) && node.isClickable -> "icon-button"
+                classShort.contains("Tab", true) -> "tab"
+                classShort.contains("Switch", true) || classShort.contains("Toggle", true) -> "toggle"
+                classShort.contains("CheckBox", true) -> "checkbox"
+                node.isScrollable -> "scrollable"
+                node.isClickable -> "clickable"
+                else -> "interactive"
+            }
+
+            out.add(mapOf(
+                "text" to text.ifBlank { null },
+                "description" to desc.ifBlank { null },
+                "class_short" to classShort,
+                "role" to role,
+                "cx" to (bounds.left + bounds.right) / 2,
+                "cy" to (bounds.top + bounds.bottom) / 2,
+                "bounds" to listOf(bounds.left, bounds.top, bounds.right, bounds.bottom)
+            ))
+        }
+
+        for (i in 0 until node.childCount) {
+            try {
+                val child = node.getChild(i) ?: continue
+                collectExploreElements(child, out, depth + 1)
+                try { child.recycle() } catch (_: Exception) {}
+            } catch (_: Exception) {}
         }
     }
 }

@@ -84,6 +84,20 @@ private val BUILTIN_SKILLS = listOf(
     SkillInfo("Infographic Generator", "PNG infographics from data (Pillow)", "Python Skill"),
     SkillInfo("MarkItDown", "Convert PDF/Word/Excel to markdown", "Python Skill"),
     SkillInfo("Data Analysis", "pandas + matplotlib + scipy", "Python Skill"),
+    SkillInfo("Search & Act", "Open → Search → Select → Act (any app)", "Automation"),
+    SkillInfo("explore_app", "Map unfamiliar app UI before interacting", "Automation"),
+    SkillInfo("analyze_screen_with_som", "Numbered overlay on interactive elements", "Vision"),
+    SkillInfo("analyze_screenshot", "Gemini Vision screen description", "Vision"),
+    SkillInfo("brave_search", "Brave Search API (2K/mo free)", "Search"),
+    SkillInfo("exa_search", "Neural search for research", "Search"),
+    SkillInfo("firecrawl_scrape", "Clean web scraping service", "Search"),
+    SkillInfo("send_telegram_msg/photo/doc", "Send to Telegram chat/group", "Messaging"),
+    SkillInfo("send_discord_message", "Discord webhook/bot message", "Messaging"),
+    SkillInfo("send_slack_message", "Slack webhook/bot message", "Messaging"),
+    SkillInfo("schedule_task", "Cron-style scheduled tasks", "Automation"),
+    SkillInfo("google_workspace", "Drive/Sheets/Gmail/Calendar/Docs API", "Google"),
+    SkillInfo("create_note / read_note", "Obsidian-compatible notes", "Notes"),
+    SkillInfo("memory_store / memory_search", "SQLite auto-memory system", "Memory"),
 )
 
 @Composable

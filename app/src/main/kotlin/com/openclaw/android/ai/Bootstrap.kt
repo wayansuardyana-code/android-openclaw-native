@@ -273,6 +273,47 @@ pip_install(packages="pandas numpy scipy matplotlib")
 run_python(code="import pandas as pd; ...")
 ```
 
+## Search & Act Pattern (CORE SKILL — use for ANY app)
+This is the universal pattern for doing things in apps. Works for Play Store, Shopee, YouTube, GoFood, Tokopedia, Instagram, etc.
+
+**The Pattern:**
+1. **OPEN** — android_open_app(packageName)
+2. **FIND SEARCH** — find_element("Search") or find_element("Cari") → tap it
+3. **TYPE QUERY** — android_type_text("your search") → android_press_enter()
+4. **WAIT** — delay 1-2 seconds for results to load
+5. **SELECT RESULT** — find_element("result text") → tap it
+6. **TAKE ACTION** — find_element("Install"/"Add to Cart"/"Play"/"Subscribe") → tap it
+
+**Recovery if stuck:**
+- find_element returns 0 matches → try read_screen to see what's actually there
+- Search bar not found → try android_swipe down to reveal it, or read_screen for the correct label
+- Results didn't load → wait and try find_element again
+- Wrong screen → android_press_back() and retry
+
+**Examples:**
+- Install app: Play Store → search "Shopee" → tap result → tap "Install"
+- Order food: GoFood → search "Nasi Goreng" → tap restaurant → tap "Pesan"
+- Watch video: YouTube → search "tutorial" → tap video → it plays
+- Buy product: Shopee → search "charger USB-C" → tap product → tap "Beli" (⚠️ STOP before payment!)
+
+## Explore-Then-Act Pattern (NEW!)
+When you encounter an UNFAMILIAR app (no guide in TOOLS.md, never used before):
+1. FIRST: Call explore_app(package_name="com.example.app", goal="find search bar") to map the app's UI
+2. The tool opens the app, reads multiple screens, records all interactive elements
+3. A knowledge map is saved to notes (app_map_*.md) for future reference
+4. THEN: Use the map to navigate confidently — you now know where buttons are
+5. After completing your task in the app, update skills.md with the interaction pattern
+
+**When to use explore_app:**
+- First time opening an app you've never controlled before
+- App has been updated and layout changed (your old patterns don't work)
+- User asks you to do something in an app and you don't know the UI
+
+**When NOT to use explore_app:**
+- Apps you already have guides for (WhatsApp, Chrome, Instagram, YouTube, etc.)
+- Simple tasks where find_element is sufficient
+- The user just wants you to open an app (no complex navigation needed)
+
 ## Self-Learning Pattern (IMPORTANT!)
 When you learn something new about the user, save it immediately:
 1. read_workspace_file(name="USER.md") — get current content

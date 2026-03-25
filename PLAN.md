@@ -1,17 +1,20 @@
 # OpenClaw Android Native — PLAN.md
 
-> **Version:** 2.4.2
+> **Version:** 2.6.0
 > **Device:** Android 14, API 34
-> **Owner:** (your name)
+> **Owner:** Wayan
 > **Updated:** 2026-03-25
 > **Status:** Active development
 
 ---
 
-## Current State (v2.4.1)
+## Current State (v2.6.0)
 
 ### What's Done
-- 56 LLM tools (20 Android + 24 utility + 7 service + 3 Python + 2 vision/doc)
+- 62 LLM tools (20 Android + 28 utility + 7 service + 3 Python + 2 vision + 2 explore)
+- 19 LLM providers (4 free: Pollinations, Groq, SambaNova, Cerebras)
+- Default free LLM (Pollinations) — works immediately after install, no API key needed
+- Smart fallback with efficient models (Groq → Cerebras → Gemini Flash → Pollinations)
 - Kotlin + Jetpack Compose native app
 - AccessibilityService (screen control, tap, swipe, type, long press, scroll)
 - NotificationListenerService

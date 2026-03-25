@@ -749,7 +749,8 @@ object UtilityTools {
                 }
 
                 "google_workspace" -> {
-                    val token = AgentConfig.getKeyForProvider("google_oauth")
+                    // Auto-refresh token if refresh_token is configured
+                    val token = getValidGoogleToken()
                     if (token.isBlank()) return@withContext """{"error":"Google OAuth2 token not configured. Go to Settings → Services → add 'google_oauth' with your access token. See User Guide for setup instructions."}"""
 
                     val service = args.get("service").asString
@@ -757,13 +758,34 @@ object UtilityTools {
                     val params = args.getAsJsonObject("params") ?: JsonObject()
 
                     try {
-                        val result = when (service) {
+                        var result = when (service) {
                             "drive" -> googleDrive(token, action, params)
                             "sheets" -> googleSheets(token, action, params)
                             "gmail" -> googleGmail(token, action, params)
                             "calendar" -> googleCalendar(token, action, params)
                             "docs" -> googleDocs(token, action, params)
                             else -> """{"error":"Unknown service: $service"}"""
+                        }
+
+                        // If token expired mid-request, try refreshing and retry once
+                        if (result.contains("Invalid Credentials", ignoreCase = true) ||
+                            result.contains("401", ignoreCase = true) ||
+                            result.contains("UNAUTHENTICATED", ignoreCase = true)) {
+                            val refreshedToken = getValidGoogleToken()
+                            if (refreshedToken != token && refreshedToken.isNotBlank()) {
+                                ServiceState.addLog("[Google] Token expired, retrying with refreshed token")
+                                // Force refresh by clearing expiry
+                                AgentConfig.googleTokenExpiry = 0
+                                val newToken = getValidGoogleToken()
+                                result = when (service) {
+                                    "drive" -> googleDrive(newToken, action, params)
+                                    "sheets" -> googleSheets(newToken, action, params)
+                                    "gmail" -> googleGmail(newToken, action, params)
+                                    "calendar" -> googleCalendar(newToken, action, params)
+                                    "docs" -> googleDocs(newToken, action, params)
+                                    else -> result
+                                }
+                            }
                         }
                         result
                     } catch (e: Exception) {
@@ -1436,6 +1458,56 @@ object UtilityTools {
     }
 
     // HTTP helpers for Google APIs
+    /**
+     * Auto-refresh Google OAuth2 access token using stored refresh_token.
+     * Returns valid access token (refreshed if expired).
+     */
+    private suspend fun getValidGoogleToken(): String {
+        val currentToken = AgentConfig.getKeyForProvider("google_oauth")
+        val refreshToken = AgentConfig.googleRefreshToken
+        val clientId = AgentConfig.googleClientId
+        val clientSecret = AgentConfig.googleClientSecret
+        val expiry = AgentConfig.googleTokenExpiry
+
+        // If no refresh token configured, just return current token
+        if (refreshToken.isBlank() || clientId.isBlank()) {
+            return currentToken
+        }
+
+        // Check if token is still valid (with 5 min buffer)
+        val now = System.currentTimeMillis()
+        if (expiry > 0 && now < expiry - 300_000 && currentToken.isNotBlank()) {
+            return currentToken
+        }
+
+        // Token expired or about to expire — refresh it
+        ServiceState.addLog("[Google OAuth] Token expired, refreshing...")
+        try {
+            val resp = sharedHttpClient.post("https://oauth2.googleapis.com/token") {
+                contentType(io.ktor.http.ContentType.Application.FormUrlEncoded)
+                setBody("grant_type=refresh_token&refresh_token=$refreshToken&client_id=$clientId&client_secret=$clientSecret")
+            }
+            val respText = resp.bodyAsText()
+            val json = Gson().fromJson(respText, JsonObject::class.java)
+
+            if (json.has("access_token")) {
+                val newToken = json.get("access_token").asString
+                val expiresIn = json.get("expires_in")?.asLong ?: 3600
+                AgentConfig.setKeyForProvider("google_oauth", newToken)
+                AgentConfig.googleTokenExpiry = now + (expiresIn * 1000)
+                ServiceState.addLog("[Google OAuth] Token refreshed, expires in ${expiresIn}s")
+                return newToken
+            } else {
+                val error = json.get("error_description")?.asString ?: json.toString().take(200)
+                ServiceState.addLog("[Google OAuth] Refresh failed: $error")
+                return currentToken // Return old token as fallback
+            }
+        } catch (e: Exception) {
+            ServiceState.addLog("[Google OAuth] Refresh error: ${e.message}")
+            return currentToken
+        }
+    }
+
     private suspend fun googleGet(token: String, url: String): String {
         val resp = sharedHttpClient.get(url) {
             header("Authorization", "Bearer $token")

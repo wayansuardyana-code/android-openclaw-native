@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Accessibility Setup Guide</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0D1117; color: #F0F6FC; font-family: 'Segoe UI', system-ui, sans-serif; padding: 16px; line-height: 1.6; }
+h1 { color: #58A6FF; font-size: 22px; margin-bottom: 8px; }
+h2 { color: #58A6FF; font-size: 17px; margin: 20px 0 8px; border-bottom: 1px solid #30363D; padding-bottom: 4px; }
+p, li { font-size: 14px; color: #C9D1D9; margin-bottom: 6px; }
+ol, ul { padding-left: 20px; }
+ol li { margin-bottom: 10px; }
+.step { background: #161B22; border: 1px solid #30363D; border-radius: 8px; padding: 12px; margin: 8px 0; }
+.step-num { background: #58A6FF; color: #0D1117; width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; font-size: 13px; margin-right: 8px; }
+.warn { background: #1C1207; border: 1px solid #D29922; border-radius: 8px; padding: 10px; margin: 10px 0; }
+.warn-title { color: #D29922; font-weight: bold; font-size: 14px; }
+.info { background: #0C2D48; border: 1px solid #58A6FF; border-radius: 8px; padding: 10px; margin: 10px 0; }
+code { background: #161B22; color: #3FB950; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<h1>Accessibility Service Setup</h1>
+<p style="color: #8B949E; font-size: 12px;">Required after every app update</p>
+
+<div class="warn">
+<p class="warn-title">Why do I need to do this?</p>
+<p>Android automatically disables Accessibility Services when an app is updated or reinstalled. This is a security feature built into Android — it cannot be bypassed.</p>
+<p style="margin-top:6px;">OpenClaw needs Accessibility Service to read your screen, tap buttons, type text, and control apps. Without it, the AI agent cannot interact with your device.</p>
+</div>
+
+<h2>Steps to Re-enable</h2>
+
+<div class="step">
+<p><span class="step-num">1</span> Open <strong>Settings</strong> on your device</p>
+</div>
+
+<div class="step">
+<p><span class="step-num">2</span> Go to <strong>Accessibility</strong></p>
+<p style="color:#8B949E; font-size:12px; margin-top:4px;">On some devices: Settings → Additional Settings → Accessibility</p>
+</div>
+
+<div class="step">
+<p><span class="step-num">3</span> Find <strong>OpenClaw</strong> (or "Installed apps/services")</p>
+<p style="color:#8B949E; font-size:12px; margin-top:4px;">Samsung: Settings → Accessibility → Installed apps<br>
+Xiaomi: Settings → Additional Settings → Accessibility<br>
+Pixel: Settings → Accessibility → OpenClaw</p>
+</div>
+
+<div class="step">
+<p><span class="step-num">4</span> Toggle <strong>ON</strong> the switch for OpenClaw</p>
+</div>
+
+<div class="step">
+<p><span class="step-num">5</span> Tap <strong>"Allow"</strong> on the confirmation dialog</p>
+<p style="color:#8B949E; font-size:12px; margin-top:4px;">Android will warn you about accessibility permissions — this is normal. OpenClaw needs these to control your device on your behalf.</p>
+</div>
+
+<h2>Also Enable: Notification Access</h2>
+
+<div class="step">
+<p><span class="step-num">1</span> Go to <strong>Settings → Apps → Special app access → Notification access</strong></p>
+<p style="color:#8B949E; font-size:12px; margin-top:4px;">Or: Settings → Notifications → Notification access (varies by device)</p>
+</div>
+
+<div class="step">
+<p><span class="step-num">2</span> Toggle <strong>ON</strong> for OpenClaw</p>
+</div>
+
+<div class="info">
+<p><strong>Quick check:</strong> After enabling, go to OpenClaw → Chat → type <code>/status</code>. If it shows "Service: Running", you're all set!</p>
+</div>
+
+<h2>Troubleshooting</h2>
+
+<div class="step">
+<p><strong>Can't find OpenClaw in Accessibility list?</strong></p>
+<p>Force stop OpenClaw → reopen it → check again. Some devices need a restart.</p>
+</div>
+
+<div class="step">
+<p><strong>Accessibility keeps turning off?</strong></p>
+<p>Some devices have "battery optimization" that kills background services. Go to Settings → Battery → OpenClaw → set to "Unrestricted" or "No restrictions".</p>
+</div>
+
+<div class="step">
+<p><strong>Samsung devices:</strong></p>
+<p>Disable "Put unused apps to sleep" in Settings → Battery → Background usage limits. Add OpenClaw to "Never sleeping apps".</p>
+</div>
+
+<div class="step">
+<p><strong>Xiaomi/MIUI devices:</strong></p>
+<p>Settings → Battery → App battery saver → OpenClaw → "No restrictions". Also: Security → Manage apps → OpenClaw → Autostart → ON.</p>
+</div>
+
+</body>
+</html>

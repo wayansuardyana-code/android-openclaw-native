@@ -140,7 +140,8 @@ fun ChatScreen() {
     // Read fresh on each recomposition (SharedPrefs reads are cheap)
     val activeProvider = AgentConfig.activeProvider
     val config = AgentConfig.toLlmConfig()
-    val hasApiKey = AgentConfig.getKeyForProvider(activeProvider).isNotBlank() || activeProvider == "ollama"
+    val hasApiKey = AgentConfig.isProviderReady()
+    val isServiceRunning by ServiceState.isRunning.collectAsState()
 
     // File picker
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
@@ -327,11 +328,33 @@ fun ChatScreen() {
         when {
             text == "/clear" -> { ChatState.clear(); com.openclaw.android.ai.ConversationManager.clear(); return }
             text == "/status" -> {
-                ChatState.addMessage(ChatMessage("system", "Provider: ${AgentConfig.activeProvider}\nModel: ${config.model}\nAPI Key: ${if (hasApiKey) "Set" else "Not set"}\nTools: 17 (8 device + 9 utility)"))
+                val serviceStatus = if (isServiceRunning) "Running" else "Stopped"
+                val providerName = activeProvider
+                val memCount = "active"  // Memory system always on
+                val tokenDisplay = com.openclaw.android.ai.ConversationManager.getContextDisplay(activeProvider)
+                ChatState.addMessage(ChatMessage("system",
+                    "--- OpenClaw Status ---\n" +
+                    "Service: $serviceStatus\n" +
+                    "Provider: $providerName\n" +
+                    "Model: ${config.model}\n" +
+                    "API Key: ${if (hasApiKey) "Ready" else "Not set"}\n" +
+                    "Context: $tokenDisplay\n" +
+                    "Memories: $memCount entries\n" +
+                    "Tools: 62 (20 Android + 28 utility + 7 service + 3 Python + 2 vision + 2 explore)\n" +
+                    "Version: ${com.openclaw.android.BuildConfig.VERSION_NAME}\n" +
+                    "Device: ${android.os.Build.MODEL} (API ${android.os.Build.VERSION.SDK_INT})"
+                ))
                 return
             }
             text == "/tools" -> {
-                ChatState.addMessage(ChatMessage("system", "Android: read_screen, tap, swipe, type_text, press_back, press_home, open_app, read_notifications\n\nUtility: run_shell_command, web_scrape, web_search, calculator, read_file, write_file, list_files, generate_csv, http_request"))
+                ChatState.addMessage(ChatMessage("system",
+                    "Android (20): read_screen, find_element, read_region, tap, long_press, swipe, type_text, press_back, press_home, press_enter, open_app, launch_url, scroll_to_text, media_control, volume, brightness, get_clipboard, set_clipboard, wifi_toggle, read_notifications\n\n" +
+                    "Vision (2): analyze_screenshot, analyze_screen_with_som + tap_som_element\n\n" +
+                    "Explore (2): explore_app, tap_som_element\n\n" +
+                    "Utility (28): run_shell, web_scrape, web_search, brave_search, exa_search, firecrawl_scrape, calculator, read_file, write_file, list_files, generate_csv, generate_xlsx, generate_pdf, http_request, spawn_sub_agent, list_sub_agents, read_workspace, update_workspace, send_telegram_msg/photo/doc, send_discord, send_slack, schedule_task, list/cancel_tasks, memory_store, memory_search, create/list/read_note\n\n" +
+                    "Service (7): github_api, vercel_api, supabase_query, google_workspace, authenticated_api, ssh_execute, postgres_query\n\n" +
+                    "Python (3): install_python, run_python, pip_install"
+                ))
                 return
             }
             text == "/help" || text == "/" -> {
@@ -366,6 +389,12 @@ fun ChatScreen() {
         val actualMessage = if (text.startsWith("/shell ")) {
             "Run this shell command: ${text.removePrefix("/shell ")}"
         } else text
+
+        // Block chat when service is stopped (Android tools won't work)
+        if (!isServiceRunning) {
+            ChatState.addMessage(ChatMessage("system", "Service is stopped. Start the service in Settings before chatting.\n\nAndroid tools (tap, swipe, read_screen, etc.) require the service to be running."))
+            return
+        }
 
         val displayMsg = if (attachedFile != null) "$actualMessage\n[Attached: ${attachedFile!!.first}]" else actualMessage
         ChatState.addMessage(ChatMessage("user", displayMsg, attachmentName = attachedFile?.first))
@@ -525,7 +554,12 @@ ${if (customPrompt.isNotBlank()) "\n--- CUSTOM INSTRUCTIONS ---\n$customPrompt" 
 
         if (!hasApiKey) {
             Card(colors = CardDefaults.cardColors(containerColor = RED.copy(alpha = 0.15f)), shape = RoundedCornerShape(0.dp), modifier = Modifier.fillMaxWidth()) {
-                Text("No API key set. Go to Settings tab.", color = RED, fontSize = 12.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(12.dp))
+                Text("No LLM configured. Go to Settings → add a provider. Pollinations is free, no key needed!", color = RED, fontSize = 12.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(12.dp))
+            }
+        }
+        if (!isServiceRunning) {
+            Card(colors = CardDefaults.cardColors(containerColor = ORANGE.copy(alpha = 0.15f)), shape = RoundedCornerShape(0.dp), modifier = Modifier.fillMaxWidth()) {
+                Text("Service stopped. Start it in Settings to chat.", color = ORANGE, fontSize = 12.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(12.dp))
             }
         }
 

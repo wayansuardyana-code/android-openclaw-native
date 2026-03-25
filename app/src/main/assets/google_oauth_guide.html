@@ -100,12 +100,7 @@ a { color: #58A6FF; }
 <p><span class="step-num">7</span> <strong>Copy the Access Token</strong></p>
 </div>
 
-<div class="warn">
-<p class="warn-title">Access Token Expires!</p>
-<p>Access tokens expire after <strong>1 hour</strong>. You'll need to refresh it periodically. Copy the <strong>Refresh Token</strong> too — future versions of OpenClaw will auto-refresh.</p>
-</div>
-
-<h2>Step 5: Add Token to OpenClaw</h2>
+<h2>Step 5: Add Tokens to OpenClaw</h2>
 
 <div class="step">
 <p><span class="step-num">1</span> Go to <strong>Settings</strong> in OpenClaw</p>
@@ -113,6 +108,30 @@ a { color: #58A6FF; }
 <p><span class="step-num">3</span> Service name: <code>google_oauth</code></p>
 <p><span class="step-num">4</span> Paste your <strong>Access Token</strong></p>
 <p><span class="step-num">5</span> Tap <strong>Save</strong></p>
+</div>
+
+<h2>Step 6: Enable Auto-Refresh (Recommended)</h2>
+
+<div class="info">
+<p><strong>New!</strong> OpenClaw can now auto-refresh your token so you never have to paste a new one.</p>
+</div>
+
+<div class="step">
+<p><span class="step-num">1</span> Go back to <a href="https://developers.google.com/oauthplayground/">OAuth 2.0 Playground</a></p>
+<p><span class="step-num">2</span> Copy the <strong>Refresh Token</strong> (it's shown below the Access Token)</p>
+<p><span class="step-num">3</span> In OpenClaw, tell the AI:</p>
+<div class="copy-box">"Save my Google OAuth refresh token: [paste_refresh_token_here]"</div>
+<p>Or add these services manually via Settings → "+":</p>
+<ul>
+<li>Service: <code>google_client_id</code> → paste your Client ID</li>
+<li>Service: <code>google_client_secret</code> → paste your Client Secret</li>
+</ul>
+<p><span class="step-num">4</span> OpenClaw will now auto-refresh expired access tokens. No more manual paste every hour!</p>
+</div>
+
+<div class="warn">
+<p class="warn-title">Keep Refresh Token Safe</p>
+<p>The refresh token doesn't expire (unless revoked). It stays on your device only — never sent anywhere except to Google's auth server.</p>
 </div>
 
 <h2>Done! Try It</h2>

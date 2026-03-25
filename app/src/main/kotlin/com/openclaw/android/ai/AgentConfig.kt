@@ -15,7 +15,7 @@ object AgentConfig {
         OpenClawApplication.instance.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     var activeProvider: String
-        get() = prefs().getString("active_provider", "minimax") ?: "minimax"
+        get() = prefs().getString("active_provider", "pollinations") ?: "pollinations"
         set(v) = prefs().edit().putString("active_provider", v).apply()
 
     var pushNotificationsEnabled: Boolean
@@ -63,6 +63,10 @@ object AgentConfig {
         "xai" to "grok-2",
         "together" to "meta-llama/Llama-3.3-70B-Instruct-Turbo",
         "fireworks" to "accounts/fireworks/models/llama-v3p3-70b-instruct",
+        "huggingface" to "meta-llama/Llama-3.3-70B-Instruct",
+        "sambanova" to "Meta-Llama-3.3-70B-Instruct",
+        "cerebras" to "llama-3.3-70b",
+        "pollinations" to "openai",
         "ollama" to "llama3.2",
         "custom" to ""
     )
@@ -89,9 +93,30 @@ object AgentConfig {
         "xai" to "https://api.x.ai",
         "together" to "https://api.together.xyz",
         "fireworks" to "https://api.fireworks.ai/inference",
+        "huggingface" to "https://api-inference.huggingface.co",
+        "sambanova" to "https://api.sambanova.ai",
+        "cerebras" to "https://api.cerebras.ai",
+        "pollinations" to "https://text.pollinations.ai/openai",
         "ollama" to "http://localhost:11434",
         "custom" to ""
     )
+
+    // Google OAuth2 refresh token storage
+    var googleRefreshToken: String
+        get() = prefs().getString("google_refresh_token", "") ?: ""
+        set(v) = prefs().edit().putString("google_refresh_token", v).apply()
+
+    var googleClientId: String
+        get() = prefs().getString("google_client_id", "") ?: ""
+        set(v) = prefs().edit().putString("google_client_id", v).apply()
+
+    var googleClientSecret: String
+        get() = prefs().getString("google_client_secret", "") ?: ""
+        set(v) = prefs().edit().putString("google_client_secret", v).apply()
+
+    var googleTokenExpiry: Long
+        get() = prefs().getLong("google_token_expiry", 0)
+        set(v) = prefs().edit().putLong("google_token_expiry", v).apply()
 
     var customBaseUrl: String
         get() = prefs().getString("custom_base_url", "") ?: ""
@@ -126,6 +151,9 @@ object AgentConfig {
     /**
      * Build config for a specific provider (used by fallback system).
      */
+    /** Providers that don't require an API key */
+    val NO_AUTH_PROVIDERS = setOf("pollinations", "ollama")
+
     fun buildConfigForProvider(provider: String): LlmClient.Config {
         val key = getKeyForProvider(provider)
         val model = getModelForProvider(provider)
@@ -150,5 +178,12 @@ object AgentConfig {
         }
 
         return LlmClient.Config(apiType, key, model, baseUrl)
+    }
+
+    /** Check if active provider is usable (has key or is no-auth) */
+    fun isProviderReady(): Boolean {
+        val provider = activeProvider
+        if (provider in NO_AUTH_PROVIDERS) return true
+        return getKeyForProvider(provider).isNotBlank()
     }
 }

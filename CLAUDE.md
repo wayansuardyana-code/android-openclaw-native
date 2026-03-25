@@ -88,7 +88,7 @@ POST /agent/chat                  # {message, provider, apiKey, model, baseUrl} 
 - POST /agent/chat endpoint accepts {message, provider, apiKey, model, baseUrl}
 - Max 10 tool-calling steps per agent run
 
-## LLM Tools (54 total)
+## LLM Tools (62 total)
 ### Android Device Tools (18)
 android_read_screen, find_element, read_region,
 android_tap, android_long_press, android_swipe, android_type_text,
@@ -154,7 +154,16 @@ This pattern ensures tasks are verifiable, results are communicated, and knowled
 - PostgreSQL JDBC removed (Android compat issue with MethodHandle on API <26) — use HTTP proxy instead
 - Shizuku integration declared but not yet connected
 - nodejs-mobile integration optional — Kotlin-native AI agent works standalone
-- v2.4.2 is latest build
+- v2.6.0 is latest build
+- v2.6.0: Default free LLM (Pollinations, zero auth), 4 new providers (HuggingFace, SambaNova, Cerebras, Pollinations), 19 providers total
+- v2.6.0: AppAgent explore-then-act (explore_app tool), Search & Act universal pattern
+- v2.6.0: Google OAuth2 auto-refresh (refresh_token + client_id + client_secret), retry on 401
+- v2.6.0: Gemini auth fix (was Bearer, now ?key= query param), better primary error logging
+- v2.6.0: Smart fallback (fast models first: Groq → Cerebras → Gemini Flash → Pollinations)
+- v2.6.0: Rate limit detection (429 → clear message in chat + logs)
+- v2.6.0: Chat blocked when service stopped, Shizuku section removed
+- v2.6.0: Accessibility Setup Guide HTML, enhanced /status and /tools commands
+- v2.6.0: 35 built-in skills shown in Connect screen
 - v2.4.2: Security audit round 2 — Telegram auth (allowed_ids), Shizuku blocklist, DNS-resolving SSRF, overnight fix, AtomicInteger, BroadcastReceiver leak fix
 - v2.4.1: Security audit fixes — HTTPS-only APK downloads, webhook URL validation, scheduled task cap (20), SoM file cleanup, optimistic scheduled task locking
 - v2.4.0: Security hardened — removed trustAllSsl, SSRF protection, shell blocklist, file path sandbox

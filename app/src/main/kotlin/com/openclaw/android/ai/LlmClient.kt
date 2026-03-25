@@ -54,9 +54,35 @@ class LlmClient {
             // If primary succeeded, return it
             if (primary.error == null && primary.content.isNotBlank()) return@withContext primary
 
+            // Log why primary failed
+            if (primary.error != null) {
+                ServiceState.addLog("LLM primary failed (${AgentConfig.activeProvider}/${config.model}): ${primary.error?.take(100)}")
+            } else if (primary.content.isBlank()) {
+                ServiceState.addLog("LLM primary returned empty (${AgentConfig.activeProvider}/${config.model})")
+            }
+
             // Fallback: try other providers with saved keys
-            val fallbackProviders = listOf("gemini", "google", "anthropic", "openai", "minimax", "openrouter", "deepseek", "groq")
-                .filter { it != config.provider && AgentConfig.getKeyForProvider(it).isNotBlank() }
+            // Use fast/efficient models for fallback (not the expensive defaults)
+            val actualProvider = AgentConfig.activeProvider
+            val fallbackModels = mapOf(
+                "gemini" to "gemini-2.5-flash",
+                "google" to "gemini-2.5-flash",
+                "anthropic" to "claude-haiku-4-5-20251001",
+                "openai" to "gpt-4.1-mini",
+                "minimax" to "MiniMax-M2.5-Highspeed",
+                "openrouter" to "google/gemini-2.5-flash",
+                "deepseek" to "deepseek-chat",
+                "groq" to "llama-3.3-70b-versatile",
+                "huggingface" to "meta-llama/Llama-3.3-70B-Instruct",
+                "sambanova" to "Meta-Llama-3.3-70B-Instruct",
+                "cerebras" to "llama-3.3-70b",
+                "pollinations" to "openai",
+            )
+            // Priority: fast free providers first, then paid
+            val fallbackOrder = listOf("groq", "cerebras", "sambanova", "gemini", "google", "pollinations",
+                "deepseek", "openrouter", "huggingface", "minimax", "openai", "anthropic")
+            val fallbackProviders = fallbackOrder
+                .filter { it != actualProvider && (AgentConfig.getKeyForProvider(it).isNotBlank() || it in AgentConfig.NO_AUTH_PROVIDERS) }
 
             if (fallbackProviders.isEmpty()) return@withContext primary // No fallbacks available
 
@@ -64,9 +90,12 @@ class LlmClient {
                 ServiceState.addLog("LLM fallback: trying $fallback")
                 try {
                     val fbConfig = AgentConfig.buildConfigForProvider(fallback)
-                    val result = callProvider(fbConfig, messages, systemPrompt, tools)
+                    // Override model with fast/efficient variant for fallback
+                    val efficientModel = fallbackModels[fallback] ?: fbConfig.model
+                    val optimizedConfig = fbConfig.copy(model = efficientModel)
+                    val result = callProvider(optimizedConfig, messages, systemPrompt, tools)
                     if (result.error == null && result.content.isNotBlank()) {
-                        ServiceState.addLog("LLM fallback: $fallback succeeded")
+                        ServiceState.addLog("LLM fallback: $fallback/$efficientModel succeeded")
                         return@withContext result
                     }
                 } catch (e: Exception) {
@@ -118,7 +147,14 @@ class LlmClient {
             contentType(ContentType.Application.Json)
             header("x-api-key", config.apiKey)
             header("anthropic-version", "2023-06-01")
+            header("anthropic-beta", "max-tokens-3-5-sonnet-2024-07-15")
             setBody(body.toString())
+        }
+
+        val anthropicStatus = response.status.value
+        if (anthropicStatus == 429) {
+            ServiceState.addLog("Rate limited by ${config.provider} (429)")
+            return LlmResponse(content = "", error = "Rate limit reached — retry later or switch provider.")
         }
 
         val respText = response.bodyAsText()
@@ -197,19 +233,38 @@ class LlmClient {
             }
         }
 
+        val isGoogle = config.baseUrl.contains("googleapis.com")
         val url = when {
-            config.baseUrl.contains("googleapis.com") ->
-                "${config.baseUrl}/v1beta/openai/chat/completions"
+            isGoogle -> "${config.baseUrl}/v1beta/openai/chat/completions"
             else -> "${config.baseUrl}/v1/chat/completions"
         }
 
         val response = client.post(url) {
             contentType(ContentType.Application.Json)
-            header("Authorization", "Bearer ${config.apiKey}")
+            if (isGoogle) {
+                // Google AI Studio uses API key as query parameter
+                url { parameters.append("key", config.apiKey) }
+            } else if (config.apiKey.isNotBlank()) {
+                // Standard Bearer token auth (skip for no-auth providers)
+                header("Authorization", "Bearer ${config.apiKey}")
+            }
             setBody(body.toString())
         }
 
+        val statusCode = response.status.value
         val respText = response.bodyAsText()
+
+        // Rate limit detection
+        if (statusCode == 429) {
+            val retryAfter = response.headers["Retry-After"] ?: "60"
+            ServiceState.addLog("Rate limited by ${config.provider} (429). Retry after ${retryAfter}s")
+            return LlmResponse(content = "", error = "Rate limit reached. Free tier limit exceeded — retry in ${retryAfter}s or switch to another provider in Settings.")
+        }
+        if (statusCode == 402 || statusCode == 403) {
+            ServiceState.addLog("Auth/quota error from ${config.provider} ($statusCode)")
+            return LlmResponse(content = "", error = "API quota exceeded or invalid key ($statusCode). Check your API key or switch provider.")
+        }
+
         if (respText.isBlank()) return LlmResponse(content = "", error = "Empty response from API")
         if (!respText.trimStart().startsWith("{")) return LlmResponse(content = "", error = "Not JSON: ${respText.take(150)}")
         val respJson = try {
@@ -220,8 +275,11 @@ class LlmClient {
 
         if (respJson.has("error")) {
             val errObj = respJson.get("error")
-            val err = if (errObj.isJsonObject) errObj.asJsonObject.get("message")?.asString ?: errObj.toString() else errObj.toString()
-            return LlmResponse(content = "", error = err)
+            val errMsg = if (errObj.isJsonObject) errObj.asJsonObject.get("message")?.asString ?: errObj.toString() else errObj.toString()
+            // Detect rate limit in error message body too
+            val isRateLimit = errMsg.contains("rate", ignoreCase = true) && errMsg.contains("limit", ignoreCase = true)
+            if (isRateLimit) ServiceState.addLog("Rate limited: $errMsg")
+            return LlmResponse(content = "", error = if (isRateLimit) "Rate limit: $errMsg — try another provider or wait." else errMsg)
         }
 
         val choice = respJson.getAsJsonArray("choices")?.get(0)?.asJsonObject

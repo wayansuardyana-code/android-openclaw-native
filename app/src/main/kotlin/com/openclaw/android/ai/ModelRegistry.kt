@@ -102,6 +102,34 @@ object ModelRegistry {
         ModelInfo("moonshot-v1-32k", "Moonshot V1 32K", "moonshot"),
         ModelInfo("moonshot-v1-8k", "Moonshot V1 8K", "moonshot"),
 
+        // ── HuggingFace (free tier — needs free HF token) ──
+        ModelInfo("meta-llama/Llama-3.3-70B-Instruct", "Llama 3.3 70B", "huggingface"),
+        ModelInfo("Qwen/Qwen2.5-72B-Instruct", "Qwen 2.5 72B", "huggingface"),
+        ModelInfo("mistralai/Mistral-Small-24B-Instruct-2501", "Mistral Small 24B", "huggingface"),
+        ModelInfo("google/gemma-2-27b-it", "Gemma 2 27B", "huggingface"),
+        ModelInfo("microsoft/Phi-3.5-mini-instruct", "Phi-3.5 Mini", "huggingface"),
+        ModelInfo("NousResearch/Hermes-3-Llama-3.1-8B", "Hermes 3 8B", "huggingface"),
+        ModelInfo("deepseek-ai/DeepSeek-R1-0528", "DeepSeek R1", "huggingface"),
+
+        // ── SambaNova (free tier — needs free API key) ──
+        ModelInfo("Meta-Llama-3.3-70B-Instruct", "Llama 3.3 70B", "sambanova"),
+        ModelInfo("DeepSeek-R1", "DeepSeek R1", "sambanova"),
+        ModelInfo("Qwen2.5-72B-Instruct", "Qwen 2.5 72B", "sambanova"),
+        ModelInfo("Meta-Llama-3.1-8B-Instruct", "Llama 3.1 8B", "sambanova"),
+
+        // ── Cerebras (free tier — needs free API key, fastest inference) ──
+        ModelInfo("llama-3.3-70b", "Llama 3.3 70B", "cerebras"),
+        ModelInfo("llama-3.1-8b", "Llama 3.1 8B", "cerebras"),
+        ModelInfo("qwen-2.5-32b", "Qwen 2.5 32B", "cerebras"),
+
+        // ── Pollinations (FREE — no API key needed!) ──
+        ModelInfo("openai", "GPT-4o Mini (free)", "pollinations"),
+        ModelInfo("mistral", "Mistral Small (free)", "pollinations"),
+        ModelInfo("qwen-coder", "Qwen Coder (free)", "pollinations"),
+        ModelInfo("llama", "Llama 3.3 (free)", "pollinations"),
+        ModelInfo("deepseek", "DeepSeek V3 (free)", "pollinations"),
+        ModelInfo("gemini", "Gemini Flash (free)", "pollinations"),
+
         // ── Ollama ──
         ModelInfo("llama3.2", "Llama 3.2", "ollama"),
         ModelInfo("llama3.2:1b", "Llama 3.2 1B", "ollama"),

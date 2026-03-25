@@ -39,11 +39,14 @@ private val TEXT = Color(0xFFF0F6FC)
 private val TEXT2 = Color(0xFF8B949E)
 
 private val ALL_PROVIDERS = listOf(
+    "pollinations" to "Pollinations (FREE)", "groq" to "Groq (Free Tier)",
+    "huggingface" to "HuggingFace (Free Tier)", "sambanova" to "SambaNova (Free Tier)",
+    "cerebras" to "Cerebras (Free Tier)",
     "anthropic" to "Anthropic Claude", "openai" to "OpenAI", "minimax" to "MiniMax",
     "google" to "Google Gemini", "gemini" to "Gemini (AI Studio)",
     "kimi" to "Kimi", "moonshot" to "Moonshot AI",
     "openrouter" to "OpenRouter", "deepseek" to "DeepSeek",
-    "mistral" to "Mistral AI", "groq" to "Groq", "xai" to "xAI (Grok)",
+    "mistral" to "Mistral AI", "xai" to "xAI (Grok)",
     "together" to "Together AI", "fireworks" to "Fireworks AI",
     "ollama" to "Ollama (Local)", "custom" to "Custom API",
 )
@@ -63,7 +66,15 @@ fun SettingsScreen(onStartService: () -> Unit = {}, onStopService: () -> Unit = 
         savedLlms.clear()
         ALL_PROVIDERS.forEach { (id, _) ->
             val key = AgentConfig.getKeyForProvider(id)
-            if (key.isNotBlank()) savedLlms.add(id to key)
+            // Show no-auth providers (pollinations, ollama) even without a key
+            if (key.isNotBlank() || id in AgentConfig.NO_AUTH_PROVIDERS) {
+                savedLlms.add(id to key)
+            }
+        }
+        // Auto-set Pollinations as default if no provider is configured
+        if (savedLlms.isNotEmpty() && AgentConfig.activeProvider.isBlank()) {
+            AgentConfig.activeProvider = savedLlms.first().first
+            activeProvider = AgentConfig.activeProvider
         }
     }
 
@@ -180,42 +191,6 @@ fun SettingsScreen(onStartService: () -> Unit = {}, onStopService: () -> Unit = 
             }
         }
 
-        // ── SHIZUKU (ADB-level power) ──
-        item { SLabel("SHIZUKU (ADB ACCESS)") }
-        item {
-            var shizukuStatus by remember { mutableStateOf(com.openclaw.android.util.ShizukuHelper.getStatus()) }
-            val isActive = shizukuStatus.contains("Active")
-            Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(10.dp)) {
-                Column(Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(8.dp).background(if (isActive) GREEN else Color(0xFFD29922), RoundedCornerShape(4.dp)))
-                        Spacer(Modifier.width(8.dp))
-                        Text(shizukuStatus, color = if (isActive) GREEN else TEXT2, fontSize = 12.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (!isActive) {
-                            Button(onClick = {
-                                com.openclaw.android.util.ShizukuHelper.requestPermission()
-                                shizukuStatus = com.openclaw.android.util.ShizukuHelper.getStatus()
-                            }, colors = ButtonDefaults.buttonColors(containerColor = CYAN), shape = RoundedCornerShape(8.dp)) {
-                                Text("Grant Permission", fontFamily = FontFamily.Monospace, fontSize = 12.sp)
-                            }
-                        }
-                        Button(onClick = {
-                            com.openclaw.android.util.ShizukuHelper.autoEnableAll()
-                            shizukuStatus = com.openclaw.android.util.ShizukuHelper.getStatus()
-                            android.widget.Toast.makeText(context, "Accessibility + Notifications enabled!", android.widget.Toast.LENGTH_SHORT).show()
-                        }, enabled = isActive, colors = ButtonDefaults.buttonColors(containerColor = if (isActive) GREEN else BORDER), shape = RoundedCornerShape(8.dp)) {
-                            Text("Enable All Services", fontFamily = FontFamily.Monospace, fontSize = 12.sp)
-                        }
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Text("Shizuku enables auto-enable accessibility after updates.", color = TEXT2, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-                }
-            }
-        }
-
         // ── NOTIFICATIONS ──
         item { SLabel("NOTIFICATIONS") }
         item {
@@ -233,7 +208,7 @@ fun SettingsScreen(onStartService: () -> Unit = {}, onStopService: () -> Unit = 
         item {
             Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(10.dp)) {
                 Column(Modifier.padding(16.dp)) {
-                    AR("Version", BuildConfig.VERSION_NAME); AR("Tools", "31"); AR("Device", android.os.Build.MODEL); AR("Android", "API ${android.os.Build.VERSION.SDK_INT}")
+                    AR("Version", BuildConfig.VERSION_NAME); AR("Tools", "62"); AR("Providers", "${ALL_PROVIDERS.size}"); AR("Device", android.os.Build.MODEL); AR("Android", "API ${android.os.Build.VERSION.SDK_INT}")
                     Spacer(Modifier.height(8.dp))
 
                     var updateStatus by remember { mutableStateOf("") }
@@ -264,6 +239,27 @@ fun SettingsScreen(onStartService: () -> Unit = {}, onStopService: () -> Unit = 
                     }
 
                     Spacer(Modifier.height(8.dp))
+
+                    // Accessibility Setup Guide button
+                    OutlinedButton(onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                            setDataAndType(Uri.parse("file:///android_asset/accessibility_guide.html"), "text/html")
+                            setClassName("com.android.chrome", "com.google.android.apps.chrome.Main")
+                        }
+                        try { context.startActivity(intent) } catch (_: Exception) {
+                            try {
+                                val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("file:///android_asset/accessibility_guide.html"))
+                                context.startActivity(webIntent)
+                            } catch (_: Exception) {
+                                Toast.makeText(context, "After update: Settings → Accessibility → enable OpenClaw", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    }, border = BorderStroke(1.dp, CYAN), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Accessibility, null, Modifier.size(16.dp), tint = CYAN); Spacer(Modifier.width(4.dp))
+                        Text("Accessibility Setup Guide", fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = CYAN)
+                    }
+
+                    Spacer(Modifier.height(4.dp))
 
                     // Google Workspace Setup Guide button
                     OutlinedButton(onClick = {
@@ -306,7 +302,7 @@ fun SettingsScreen(onStartService: () -> Unit = {}, onStopService: () -> Unit = 
                             }
                         }
                     }
-                    if (addProvider.isNotBlank() && addProvider != "ollama") {
+                    if (addProvider.isNotBlank() && addProvider !in AgentConfig.NO_AUTH_PROVIDERS) {
                         Spacer(Modifier.height(8.dp))
                         OutlinedTextField(value = addToken, onValueChange = { addToken = it },
                             placeholder = { Text("Paste API token...", fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = Color(0xFF484F58)) },
@@ -317,7 +313,7 @@ fun SettingsScreen(onStartService: () -> Unit = {}, onStopService: () -> Unit = 
                 }
             },
             confirmButton = { TextButton(onClick = {
-                if (addProvider.isNotBlank() && (addToken.isNotBlank() || addProvider == "ollama")) {
+                if (addProvider.isNotBlank() && (addToken.isNotBlank() || addProvider in AgentConfig.NO_AUTH_PROVIDERS)) {
                     AgentConfig.setKeyForProvider(addProvider, addToken); savedLlms.add(addProvider to addToken)
                     if (savedLlms.size == 1) { activeProvider = addProvider; AgentConfig.activeProvider = addProvider; selectedModel = AgentConfig.getModelForProvider(addProvider) }
                     showAddLlm = false; Toast.makeText(context, "Added!", Toast.LENGTH_SHORT).show()

@@ -88,7 +88,7 @@ POST /agent/chat                  # {message, provider, apiKey, model, baseUrl} 
 - POST /agent/chat endpoint accepts {message, provider, apiKey, model, baseUrl}
 - Max 10 tool-calling steps per agent run
 
-## LLM Tools (69 total)
+## LLM Tools (73 total)
 ### Android Device Tools (18)
 android_read_screen, find_element, read_region,
 android_tap, android_long_press, android_swipe, android_type_text,
@@ -154,7 +154,11 @@ This pattern ensures tasks are verifiable, results are communicated, and knowled
 - PostgreSQL JDBC removed (Android compat issue with MethodHandle on API <26) — use HTTP proxy instead
 - Shizuku integration declared but not yet connected
 - nodejs-mobile integration optional — Kotlin-native AI agent works standalone
-- v2.7.1 is latest build
+- v2.7.3 is latest build
+- v2.7.3: Database migration fix (chat history survives APK updates!), document creation skills
+- v2.7.3: Node.js runtime (install_node, run_node, npm_install, start_node_server) — 73 tools total
+- v2.7.3: Full storage access permission UI (MANAGE_EXTERNAL_STORAGE grant button)
+- v2.7.3: MiniMax routing fix (OpenAI-compatible), Python install Java download fallback
 - v2.7.1: Slim system prompt (~70% smaller), heartbeat skips during user chat, screenshot cleanup
 - v2.7.0: Vision-first interaction (look_and_find, look_and_describe), gesture shortcuts (scroll_down/up, swipe_left/right, pull_to_refresh)
 - v2.7.0: Agent operates phone like human: LOOK → TAP → SCROLL → TYPE → ENTER

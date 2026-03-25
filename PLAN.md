@@ -19,6 +19,32 @@
 - Default free LLM (Pollinations) — works immediately after install, no API key needed
 - Smart fallback with efficient models (Groq → Cerebras → Gemini Flash → Pollinations)
 - Market analysis skill (CoinGecko, Fear/Greed, Yahoo Finance)
+- Node.js runtime (install_node, run_node, npm_install, start_node_server)
+- Document creation skills (DOCX, PPTX, XLSX advanced, PDF advanced)
+- Full storage access permission (MANAGE_EXTERNAL_STORAGE) with UI grant button
+- Database migration fix (chat history survives APK updates)
+- MiniMax routing fix (OpenAI-compatible, not Anthropic)
+
+### VPS Replacement Roadmap (researched, feasible without root)
+**Phase 1 — Linux Environment** (next)
+- Embed Termux-style bootstrap (50MB zip with bash, coreutils, core tools)
+- Implement linker bypass (/system/bin/linker64) for W^X on Android 10+
+- Package manager (apt/apk) for installing more tools
+
+**Phase 2 — Tunneling**
+- Ship cloudflared aarch64 binary (free Cloudflare Tunnel)
+- manage_tunnel tool: create/start/stop tunnels
+- Phone becomes publicly accessible server (HTTPS, custom domain)
+
+**Phase 3 — Mission Control**
+- Web dashboard on VPS (or Vercel)
+- Manage fleet of phones (each running OpenClaw/Nate)
+- SSH tunnel to each phone, task delegation, monitoring
+
+**Phase 4 — PRoot Linux** (optional power mode)
+- Full Alpine/Debian in proot (no root needed)
+- Docker-like workflows, complex build systems
+- Proven by tiny_computer (2.9K stars)
 - Kotlin + Jetpack Compose native app
 - AccessibilityService (screen control, tap, swipe, type, long press, scroll)
 - NotificationListenerService

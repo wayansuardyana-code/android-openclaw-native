@@ -181,6 +181,40 @@ fun SettingsScreen(onStartService: () -> Unit = {}, onStopService: () -> Unit = 
             }
         }
 
+        // ── PERMISSIONS ──
+        item { SLabel("PERMISSIONS") }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(10.dp)) {
+                Column(Modifier.padding(16.dp)) {
+                    val hasStorageAccess = if (android.os.Build.VERSION.SDK_INT >= 30)
+                        android.os.Environment.isExternalStorageManager() else true
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Full Storage Access", color = TEXT, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
+                            Text("Access all files on /sdcard/ (Photos, Downloads, Documents, .termux, etc.)", color = TEXT2, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                        }
+                        if (hasStorageAccess) {
+                            Text("Granted", color = GREEN, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                        } else {
+                            Button(onClick = {
+                                if (android.os.Build.VERSION.SDK_INT >= 30) {
+                                    val intent = android.content.Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                                    intent.data = Uri.parse("package:${context.packageName}")
+                                    intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    try { context.startActivity(intent) } catch (_: Exception) {
+                                        val fallback = android.content.Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                                        context.startActivity(fallback)
+                                    }
+                                }
+                            }, colors = ButtonDefaults.buttonColors(containerColor = CYAN), shape = RoundedCornerShape(8.dp)) {
+                                Text("Grant", fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // ── NOTIFICATIONS ──
         item { SLabel("NOTIFICATIONS") }
         item {

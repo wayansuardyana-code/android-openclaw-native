@@ -36,7 +36,7 @@ object AndroidTools {
     @Volatile
     private var lastSomElements: List<SomElement> = emptyList()
 
-    fun getToolDefinitions(): List<ToolDef> = getAndroidTools() + UtilityTools.getToolDefinitions() + ServiceTools.getToolDefinitions() + PythonRuntime.getToolDefinitions()
+    fun getToolDefinitions(): List<ToolDef> = getAndroidTools() + UtilityTools.getToolDefinitions() + ServiceTools.getToolDefinitions() + PythonRuntime.getToolDefinitions() + NodeRuntime.getToolDefinitions()
 
     private fun getAndroidTools(): List<ToolDef> = listOf(
         ToolDef(
@@ -1171,7 +1171,10 @@ Format as a structured list. Be precise with coordinates — they will be used f
                     val utilResult = UtilityTools.executeTool(name, args)
                     if (utilResult.contains("Unknown tool")) {
                         val svcResult = ServiceTools.executeTool(name, args)
-                        if (svcResult.contains("Unknown service tool")) PythonRuntime.executeTool(name, args) else svcResult
+                        if (svcResult.contains("Unknown service tool")) {
+                            val pyResult = PythonRuntime.executeTool(name, args)
+                            if (pyResult.contains("Unknown python tool")) NodeRuntime.executeTool(name, args) else pyResult
+                        } else svcResult
                     } else utilResult
                 }
             }

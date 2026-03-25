@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -117,18 +118,24 @@ fun LogsTab() {
             if (filteredLogs.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No logs", color = Color(0xFF484F58), fontFamily = FontFamily.Monospace, fontSize = 12.sp) }
             } else {
-                SelectionContainer {
-                    LazyColumn(state = listState, modifier = Modifier.padding(8.dp)) {
-                        items(filteredLogs) { log ->
-                            val color = when {
-                                log.lowercase().let { it.contains("error") || it.contains("fail") } -> RED
-                                log.lowercase().let { it.contains("started") || it.contains("success") } -> GREEN
-                                log.lowercase().contains("tool") -> CYAN
-                                log.lowercase().contains("warning") -> Color(0xFFD29922)
-                                else -> Color(0xFFC9D1D9)
-                            }
-                            Text(log, color = color, fontFamily = FontFamily.Monospace, fontSize = 10.sp, lineHeight = 14.sp, modifier = Modifier.padding(vertical = 1.dp))
+                LazyColumn(state = listState, modifier = Modifier.padding(8.dp)) {
+                    items(filteredLogs) { log ->
+                        val color = when {
+                            log.lowercase().let { it.contains("error") || it.contains("fail") } -> RED
+                            log.lowercase().let { it.contains("started") || it.contains("success") } -> GREEN
+                            log.lowercase().contains("tool") -> CYAN
+                            log.lowercase().contains("warning") -> Color(0xFFD29922)
+                            else -> Color(0xFFC9D1D9)
                         }
+                        // Note: SelectionContainer inside LazyColumn crashes (Compose bug)
+                        // Tap a log entry to copy it
+                        val ctx = LocalContext.current
+                        Text(log, color = color, fontFamily = FontFamily.Monospace, fontSize = 10.sp, lineHeight = 14.sp,
+                            modifier = Modifier.padding(vertical = 1.dp).clickable {
+                                val clip = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                clip.setPrimaryClip(android.content.ClipData.newPlainText("log", log))
+                                android.widget.Toast.makeText(ctx, "Copied!", android.widget.Toast.LENGTH_SHORT).show()
+                            })
                     }
                 }
             }

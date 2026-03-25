@@ -62,6 +62,10 @@ class TelegramBotService {
     @Volatile
     private var isRunning = false
 
+    /** Bot's own username (fetched via getMe on startup) — used to detect mentions in groups */
+    private var botUsername: String = ""
+    private var botId: Long = 0
+
     /**
      * Start the Telegram bot polling loop.
      * No-op if already running or if no token is configured.
@@ -104,6 +108,18 @@ class TelegramBotService {
     private suspend fun pollLoop(token: String) {
         val baseUrl = "https://api.telegram.org/bot$token"
         var backoffMs = 1000L
+
+        // Fetch bot's own username via getMe (needed for group mention detection)
+        try {
+            val meResp = httpClient.get("$baseUrl/getMe")
+            val meJson = parseJson(meResp.bodyAsText())
+            val result = meJson?.getAsJsonObject("result")
+            botUsername = result?.get("username")?.asString ?: ""
+            botId = result?.get("id")?.asLong ?: 0
+            ServiceState.addLog("Telegram: bot is @$botUsername (id=$botId)")
+        } catch (e: Exception) {
+            ServiceState.addLog("Telegram: getMe failed — ${e.message?.take(60)}")
+        }
 
         // Flush pending updates on startup to avoid replaying old messages
         try {
@@ -162,17 +178,27 @@ class TelegramBotService {
                     val from = message.getAsJsonObject("from")
                     val firstName = from?.get("first_name")?.asString ?: "User"
 
-                    // For groups: strip @botname mention from text
-                    val text = rawText.replace(Regex("@\\w+bot\\b", RegexOption.IGNORE_CASE), "").trim()
-                    if (text.isBlank()) continue // Empty after stripping mention
+                    val isGroup = chatType == "group" || chatType == "supergroup"
 
-                    // Log with chat type for debugging
-                    ServiceState.addLog("Telegram [$chatType]: $firstName (chat=$chatId): ${text.take(80)}")
-
-                    // Save chat ID — for groups, save separately so tools can target either
-                    if (chatType == "group" || chatType == "supergroup") {
+                    // In groups: ONLY respond when @mentioned or replied to
+                    if (isGroup) {
                         lastGroupChatId = chatId
+                        val isMentioned = botUsername.isNotBlank() && rawText.contains("@$botUsername", ignoreCase = true)
+                        val isReplyToBot = message.getAsJsonObject("reply_to_message")
+                            ?.getAsJsonObject("from")?.get("id")?.asLong == botId
+                        val isCommand = rawText.startsWith("/")
+                        if (!isMentioned && !isReplyToBot && !isCommand) continue // Ignore non-tagged group messages
                     }
+
+                    // Strip @botname mention from text
+                    val text = if (botUsername.isNotBlank()) {
+                        rawText.replace("@$botUsername", "", ignoreCase = true).trim()
+                    } else {
+                        rawText.replace(Regex("@\\w+bot\\b", RegexOption.IGNORE_CASE), "").trim()
+                    }
+                    if (text.isBlank()) continue
+
+                    ServiceState.addLog("Telegram [$chatType]: $firstName (chat=$chatId): ${text.take(80)}")
 
                     // If agent is already thinking, inject as mid-task feedback
                     if (agentLoop.isThinking.value) {

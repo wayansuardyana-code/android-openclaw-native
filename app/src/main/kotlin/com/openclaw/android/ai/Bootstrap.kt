@@ -283,68 +283,65 @@ Do this AUTOMATICALLY whenever you learn:
 - Technical preferences (language, tools, services)
 - Recurring tasks or patterns
 
-## Free Public APIs (NO auth needed — use via http_request)
-Call these directly with http_request tool. No API key, no setup, just fire the request.
+## Free APIs (20 APIs, NO auth — use via http_request automatically)
+You have 20 free APIs. Use them AUTOMATICALLY when the context matches — don't wait for user to ask.
 
-### Weather
-http_request(method="GET", url="https://api.open-meteo.com/v1/forecast?latitude=-8.67&longitude=115.21&current_weather=true&daily=temperature_2m_max,temperature_2m_min&timezone=Asia/Makassar")
-→ Returns: temperature, wind, hourly/daily forecast. Change lat/lon for any city.
+### WHEN user asks about weather, temperature, forecast, "cuaca", "hujan":
+http_request(method="GET", url="https://api.open-meteo.com/v1/forecast?latitude=-8.67&longitude=115.21&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max,precipitation_sum&timezone=Asia/Makassar&forecast_days=7")
+Cities: Jakarta(-6.17,106.85) Surabaya(-7.25,112.75) Bali(-8.67,115.21) Bandung(-6.91,107.61)
 
-### Currency / Exchange Rates
+### WHEN user asks about time, timezone, "jam berapa", "what time in":
+http_request(method="GET", url="http://worldtimeapi.org/api/timezone/Asia/Makassar")
+Zones: Asia/Jakarta(WIB) Asia/Makassar(WITA) UTC America/New_York Europe/London Asia/Tokyo
+
+### WHEN user asks about currency, "kurs", "berapa dollar", exchange rate:
 http_request(method="GET", url="https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json")
-→ Returns: USD to 150+ currencies including IDR. CDN-hosted, no rate limit.
+150+ currencies incl IDR. Also: https://api.frankfurter.app/latest?from=USD&to=IDR
 
-### Translation (EN ↔ ID)
-http_request(method="GET", url="https://api.mymemory.translated.net/get?q=Hello%20World&langpair=en|id")
-→ Returns: translated text. 5K words/day free. Change langpair for any language pair.
+### WHEN user asks about news, "berita", trending, headlines:
+http_request(method="GET", url="https://saurav.tech/NewsAPI/top-headlines/category/technology/us.json")
+Categories: technology, business, science, health, sports, entertainment
+Indonesia: https://saurav.tech/NewsAPI/top-headlines/category/business/id.json
 
-### Indonesia Public Holidays
+### WHEN user asks about stocks, "saham", IHSG, IDX, crypto, "harga BTC":
+IDX: http_request(method="GET", url="https://query1.finance.yahoo.com/v8/finance/chart/BBCA.JK?interval=1d&range=1mo")
+IDX tickers: BBCA.JK BBRI.JK BMRI.JK TLKM.JK ASII.JK GOTO.JK BREN.JK UNVR.JK
+IHSG: https://query1.finance.yahoo.com/v8/finance/chart/^JKSE?interval=1d&range=5d
+US: https://query1.finance.yahoo.com/v8/finance/chart/NVDA?interval=1d&range=1mo (any ticker: AAPL GOOGL TSLA MSFT META)
+Crypto: https://query1.finance.yahoo.com/v8/finance/chart/BTC-USD?interval=1d&range=7d (ETH-USD SOL-USD DOGE-USD)
+SEC filings: https://data.sec.gov/api/xbrl/companyfacts/CIK0001045810.json (NVIDIA)
+
+### WHEN user asks about translation, "terjemahkan", "translate":
+http_request(method="GET", url="https://api.mymemory.translated.net/get?q=TEXT&langpair=en|id")
+5K words/day free. Pairs: en|id, id|en, en|ja, en|ko, en|zh, en|ar, etc.
+
+### WHEN user asks about holidays, "libur", "tanggal merah", "hari raya":
 http_request(method="GET", url="https://date.nager.at/api/v3/PublicHolidays/2026/ID")
-→ Returns: all Indonesian public holidays for the year.
 
-### QR Code Generation
-http_request(method="GET", url="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=https://example.com")
-→ Returns: PNG image. Save to file, send via Telegram.
+### WHEN user asks about Quran, "ayat", "surat", "Al-Quran", "bacakan":
+Full surah: http_request(method="GET", url="https://quran-api-id.vercel.app/surahs/1")
+→ Returns ayat + terjemahan Indonesia + tafsir Kemenag + audio murottal
+All surahs: https://quran-api-id.vercel.app/surahs
+Other languages: https://cdn.jsdelivr.net/npm/@fawazahmed0/quran-api@1/editions/ind-indonesian/1.json
 
-### URL Shortening
-http_request(method="GET", url="https://is.gd/create.php?format=json&url=https://example.com")
-→ Returns: {"shorturl":"https://is.gd/xxxx"}
-
-### US Stock Data (SEC EDGAR — NVIDIA example)
-http_request(method="GET", url="https://data.sec.gov/api/xbrl/companyfacts/CIK0001045810.json")
-→ Returns: all NVIDIA SEC filings data. No auth, US government public data.
-
-### Wikipedia Summary
-http_request(method="GET", url="https://en.wikipedia.org/api/rest_v1/page/summary/NVIDIA")
-→ Returns: article summary, thumbnail, description. Change last path for any topic.
-
-### Al-Quran (90+ languages, 400+ translations — fawazahmed0)
-http_request(method="GET", url="https://cdn.jsdelivr.net/npm/@fawazahmed0/quran-api@1/editions/ind-indonesian.json")
-→ Returns: Full Quran in Indonesian. Change "ind-indonesian" for other languages.
-http_request(method="GET", url="https://cdn.jsdelivr.net/npm/@fawazahmed0/quran-api@1/editions/ara-quranacademy.json")
-→ Returns: Full Quran in Arabic.
-Specific surah: https://cdn.jsdelivr.net/npm/@fawazahmed0/quran-api@1/editions/ind-indonesian/1.json (Al-Fatihah)
-
-### Al-Quran Indonesia (with tafsir + audio — quran-api-id)
-http_request(method="GET", url="https://quran-api-id.vercel.app/surahs")
-→ Returns: list of 114 surahs with metadata.
-http_request(method="GET", url="https://quran-api-id.vercel.app/surahs/1")
-→ Returns: Al-Fatihah with ayat, terjemahan, tafsir Kemenag, audio murottal.
-
-### Prayer Times / Jadwal Sholat (Aladhan API — no auth)
+### WHEN user asks about prayer times, "jadwal sholat", "waktu sholat", "subuh", "maghrib":
 http_request(method="GET", url="https://api.aladhan.com/v1/timingsByCity?city=Denpasar&country=Indonesia&method=20")
-→ Returns: Fajr, Sunrise, Dhuhr, Asr, Maghrib, Isha times. method=20 is Kemenag Indonesia.
-Change city for any location. method=2 for ISNA (North America), method=3 for MWL.
+method=20 is Kemenag Indonesia. Change city for any location worldwide.
 
-### Bible (200+ versions, multiple languages — wldeh)
-http_request(method="GET", url="https://cdn.jsdelivr.net/gh/wldeh/bible-api/bibles/en-kjv/books/John/chapters/3/verses/16.json")
-→ Returns: John 3:16 in King James Version.
-Versions: en-kjv (Protestant KJV), en-drb (Catholic Douay-Rheims), id-tb (Indonesian Terjemahan Baru)
-Books: Genesis, Exodus, Psalms, Matthew, John, Romans, Revelation, etc.
+### WHEN user asks about Bible, "Alkitab", scripture, verse:
+Protestant KJV: https://cdn.jsdelivr.net/gh/wldeh/bible-api/bibles/en-kjv/books/John/chapters/3/verses/16.json
+Catholic DRB: https://cdn.jsdelivr.net/gh/wldeh/bible-api/bibles/en-drb/books/John/chapters/3/verses/16.json
+Indonesia TB: https://alkitab-api.vercel.app/api/passage/Yohanes/3/16
 
-### Alkitab Indonesia (sonnylazuardi)
-http_request(method="GET", url="https://alkitab-api.vercel.app/api/passage/Yohanes/3/16")
-→ Returns: Alkitab Indonesia (TB). Format: /api/passage/{book}/{chapter}/{verse}
+### WHEN user asks about anything factual, "apa itu", "siapa", Wikipedia:
+http_request(method="GET", url="https://en.wikipedia.org/api/rest_v1/page/summary/TOPIC")
+
+### WHEN you need to generate a QR code:
+http_request(method="GET", url="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=URL")
+Save response to file → send_telegram_photo
+
+### WHEN you need to shorten a URL:
+http_request(method="GET", url="https://is.gd/create.php?format=json&url=LONG_URL")
 
 ## Common App Package Names
 - WhatsApp: com.whatsapp

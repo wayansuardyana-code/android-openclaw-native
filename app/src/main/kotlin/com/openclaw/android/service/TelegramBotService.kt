@@ -25,6 +25,7 @@ class TelegramBotService {
 
     companion object {
         @Volatile var lastChatId: Long = 0
+        @Volatile var lastGroupChatId: Long = 0  // Separate group ID for targeting groups
     }
 
     private val gson = Gson()
@@ -152,15 +153,26 @@ class TelegramBotService {
                     val updateId = update.get("update_id").asLong
                     lastUpdateId = updateId + 1
 
-                    // Only process text messages
+                    // Process text messages (DM, group, supergroup)
                     val message = update.getAsJsonObject("message") ?: continue
-                    val text = message.get("text")?.asString ?: continue
+                    val rawText = message.get("text")?.asString ?: continue
                     val chat = message.getAsJsonObject("chat") ?: continue
                     val chatId = chat.get("id").asLong
+                    val chatType = chat.get("type")?.asString ?: "private" // private, group, supergroup
                     val from = message.getAsJsonObject("from")
                     val firstName = from?.get("first_name")?.asString ?: "User"
 
-                    ServiceState.addLog("Telegram: message from $firstName: ${text.take(80)}")
+                    // For groups: strip @botname mention from text
+                    val text = rawText.replace(Regex("@\\w+bot\\b", RegexOption.IGNORE_CASE), "").trim()
+                    if (text.isBlank()) continue // Empty after stripping mention
+
+                    // Log with chat type for debugging
+                    ServiceState.addLog("Telegram [$chatType]: $firstName (chat=$chatId): ${text.take(80)}")
+
+                    // Save chat ID — for groups, save separately so tools can target either
+                    if (chatType == "group" || chatType == "supergroup") {
+                        lastGroupChatId = chatId
+                    }
 
                     // If agent is already thinking, inject as mid-task feedback
                     if (agentLoop.isThinking.value) {

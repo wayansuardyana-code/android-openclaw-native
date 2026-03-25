@@ -282,11 +282,13 @@ object UtilityTools {
         ),
         ToolDef(
             name = "send_telegram_message",
-            description = "Send a text message to the current Telegram chat. Use to report text results, summaries, or data to the user via Telegram. Supports Markdown formatting.",
+            description = "Send a text message to Telegram. Defaults to last active chat. Use target='group' to send to the group chat instead of DM.",
             inputSchema = mapOf(
                 "type" to "object",
                 "properties" to mapOf(
-                    "text" to mapOf("type" to "string", "description" to "Message text to send (supports Markdown: *bold*, _italic_, `code`)")
+                    "text" to mapOf("type" to "string", "description" to "Message text to send (supports Markdown: *bold*, _italic_, `code`)"),
+                    "target" to mapOf("type" to "string", "description" to "Where to send: 'dm' (default, last DM chat) or 'group' (last group chat)", "enum" to listOf("dm", "group")),
+                    "chat_id" to mapOf("type" to "number", "description" to "Optional: explicit chat ID to send to (overrides target)")
                 ),
                 "required" to listOf("text")
             )
@@ -418,8 +420,12 @@ object UtilityTools {
                     val text = args.get("text").asString
                     val token = AgentConfig.getKeyForProvider("telegram")
                     if (token.isBlank()) return@withContext """{"error":"Telegram bot token not configured"}"""
-                    val chatId = com.openclaw.android.service.TelegramBotService.lastChatId
-                    if (chatId == 0L) return@withContext """{"error":"No active Telegram chat"}"""
+                    val target = args.get("target")?.asString ?: "dm"
+                    val explicitId = args.get("chat_id")?.asLong
+                    val chatId = explicitId
+                        ?: if (target == "group") com.openclaw.android.service.TelegramBotService.lastGroupChatId
+                        else com.openclaw.android.service.TelegramBotService.lastChatId
+                    if (chatId == 0L) return@withContext """{"error":"No active Telegram ${if (target == "group") "group" else "chat"}. Send a message to the bot first."}"""
 
                     try {
                         val body = com.google.gson.JsonObject().apply {

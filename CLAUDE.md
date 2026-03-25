@@ -155,7 +155,8 @@ This pattern ensures tasks are verifiable, results are communicated, and knowled
 - Shizuku integration declared but not yet connected
 - nodejs-mobile integration optional — Kotlin-native AI agent works standalone
 - APK served via `python3 -m http.server 8899` on VPS for download
-- v2.4.1 is latest build
+- v2.4.2 is latest build
+- v2.4.2: Security audit round 2 — Telegram auth (allowed_ids), Shizuku blocklist, DNS-resolving SSRF, overnight fix, AtomicInteger, BroadcastReceiver leak fix
 - v2.4.1: Security audit fixes — HTTPS-only APK downloads, webhook URL validation, scheduled task cap (20), SoM file cleanup, optimistic scheduled task locking
 - v2.4.0: Security hardened — removed trustAllSsl, SSRF protection, shell blocklist, file path sandbox
 - v2.4.0: SoM vision overlay (analyze_screen_with_som + tap_som_element)

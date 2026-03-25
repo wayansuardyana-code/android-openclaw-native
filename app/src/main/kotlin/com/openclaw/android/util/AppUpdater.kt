@@ -117,9 +117,9 @@ object AppUpdater {
         // Register receiver to install when download completes
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context, intent: Intent) {
+                ctx.unregisterReceiver(this)  // Always unregister first
                 val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
                 if (id == downloadId) {
-                    ctx.unregisterReceiver(this)
                     installApk(ctx, fileName)
                 }
             }

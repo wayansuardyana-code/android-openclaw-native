@@ -396,6 +396,11 @@ object AndroidTools {
                 }
                 "shizuku_command" -> {
                     val cmd = args.get("command").asString
+                    val lowerCmd = cmd.lowercase()
+                    val blocklist = listOf("rm -rf /", "rm -r /", "mkfs", "dd if=", "shared_prefs", "databases/", "curl ", "wget ", "nc ", "pm uninstall", "pm disable", "pm clear")
+                    if (blocklist.any { lowerCmd.contains(it) }) {
+                        return """{"error":"Command blocked for security"}"""
+                    }
                     val result = com.openclaw.android.util.ShizukuHelper.runShellCommand(cmd)
                     """{"output":${com.google.gson.Gson().toJson(result)}}"""
                 }

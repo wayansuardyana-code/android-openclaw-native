@@ -832,14 +832,27 @@ object UtilityTools {
     private fun isUrlSafe(url: String): Boolean {
         try {
             val parsed = java.net.URL(url)
-            val host = parsed.host.lowercase()
-            // Block private/internal networks
-            if (host == "localhost" || host == "127.0.0.1" || host == "0.0.0.0") return false
-            if (host.startsWith("10.")) return false
-            if (host.startsWith("192.168.")) return false
-            if (host.startsWith("172.") && host.split(".").getOrNull(1)?.toIntOrNull()?.let { it in 16..31 } == true) return false
-            if (host == "169.254.169.254") return false // Cloud metadata
             if (parsed.protocol == "file") return false
+            val host = parsed.host?.lowercase() ?: return false
+
+            // Block obvious hostnames
+            if (host == "localhost" || host == "0.0.0.0" || host == "[::]") return false
+
+            // Resolve DNS and check the actual IP
+            try {
+                val addresses = java.net.InetAddress.getAllByName(host)
+                for (addr in addresses) {
+                    if (addr.isLoopbackAddress) return false      // 127.x.x.x, ::1
+                    if (addr.isLinkLocalAddress) return false     // 169.254.x.x, fe80::
+                    if (addr.isSiteLocalAddress) return false     // 10.x, 172.16-31.x, 192.168.x
+                    if (addr.isAnyLocalAddress) return false      // 0.0.0.0, ::
+                    // Block cloud metadata
+                    if (addr.hostAddress == "169.254.169.254") return false
+                }
+            } catch (_: Exception) {
+                return false // DNS resolution failed — block
+            }
+
             return true
         } catch (_: Exception) { return false }
     }

@@ -174,7 +174,7 @@ object ConversationManager {
     }
 
     /** Clear all history */
-    fun clear() {
+    @Synchronized fun clear() {
         _history.clear()
         _tokenCount.value = 0
     }

@@ -98,7 +98,9 @@ class TelegramBotService {
         isRunning = false
         pollingJob?.cancel()
         pollingJob = null
-        httpClient.close()
+        scope.coroutineContext[kotlinx.coroutines.Job]?.cancel()  // Cancel all child coroutines first
+        // Don't close httpClient here — let coroutines finish naturally
+        // httpClient will be GC'd with the service
         ServiceState.addLog("Telegram: stopped")
     }
 
@@ -177,6 +179,17 @@ class TelegramBotService {
                     val chatType = chat.get("type")?.asString ?: "private" // private, group, supergroup
                     val from = message.getAsJsonObject("from")
                     val firstName = from?.get("first_name")?.asString ?: "User"
+
+                    // Auth check: only allow configured owner
+                    val allowedIds = AgentConfig.getKeyForProvider("telegram_allowed_ids")
+                    if (allowedIds.isNotBlank()) {
+                        val fromId = from?.get("id")?.asLong ?: 0
+                        val allowed = allowedIds.split(",").mapNotNull { it.trim().toLongOrNull() }.toSet()
+                        if (chatId !in allowed && fromId !in allowed) {
+                            ServiceState.addLog("Telegram: blocked message from unauthorized user $firstName (id=$fromId, chat=$chatId)")
+                            continue
+                        }
+                    }
 
                     val isGroup = chatType == "group" || chatType == "supergroup"
 

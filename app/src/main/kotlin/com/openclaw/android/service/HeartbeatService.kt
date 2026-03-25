@@ -103,7 +103,7 @@ class HeartbeatService {
 
             // ── Phase 2: Autonomous program (HEARTBEAT.md) ──
             // Skip overnight (23:00-06:00) unless there are pending tasks
-            if (hour in 23..23 || hour in 0..5) {
+            if (hour >= 22 || hour in 0..5) {
                 ServiceState.addLog("Heartbeat: overnight — skipping autonomous program")
                 return
             }

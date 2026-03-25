@@ -1,6 +1,6 @@
 # OpenClaw Android Native — PLAN.md
 
-> **Version:** 2.4.1
+> **Version:** 2.4.2
 > **Device:** ADVAN X1 (Android 14, API 34)
 > **Owner:** Wayan
 > **Updated:** 2026-03-25

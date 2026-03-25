@@ -9,7 +9,7 @@ data class ScheduledTaskEntity(
     val prompt: String,                    // What to tell the agent
     val cronExpression: String = "",       // Cron-like: "0 8 * * *" (8am daily)
     val intervalMinutes: Int = 0,          // Alternative: run every N minutes
-    val nextRunAt: Long = 0,              // Next scheduled execution timestamp
+    val nextRunAt: Long = Long.MAX_VALUE,              // Next scheduled execution timestamp
     val lastRunAt: Long = 0,              // Last execution timestamp
     val isEnabled: Boolean = true,
     val createdAt: Long = System.currentTimeMillis(),

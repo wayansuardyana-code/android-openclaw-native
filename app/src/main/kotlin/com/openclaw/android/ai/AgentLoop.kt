@@ -415,7 +415,7 @@ class AgentLoop(private val llmClient: LlmClient) {
     // Agent automatically saves to SQLite WITHOUT being told.
     // Three triggers: (1) every conversation turn, (2) significant tool results, (3) periodic prune.
 
-    private var conversationCounter = 0  // For periodic prune (every 20 turns)
+    private val conversationCounter = java.util.concurrent.atomic.AtomicInteger(0)  // For periodic prune (every 20 turns)
 
     /** Save a memory to SQLite — suspend-safe, no runBlocking */
     private suspend fun saveToSqlite(content: String, type: String = "general", importance: Float = 0.5f, metadata: String = "{}") {
@@ -466,8 +466,7 @@ class AgentLoop(private val llmClient: LlmClient) {
                 metadata = """{"steps":$steps,"tools_count":${toolsUsed.size}}""")
 
             // Periodic prune: every 20 conversations, check and clean up
-            conversationCounter++
-            if (conversationCounter % 20 == 0) {
+            if (conversationCounter.incrementAndGet() % 20 == 0) {
                 withContext(Dispatchers.IO) {
                     val db = AppDatabase.getInstance(OpenClawApplication.instance)
                     // Lightweight count: fetch 501 to check if over 500, don't load all

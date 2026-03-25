@@ -88,7 +88,7 @@ POST /agent/chat                  # {message, provider, apiKey, model, baseUrl} 
 - POST /agent/chat endpoint accepts {message, provider, apiKey, model, baseUrl}
 - Max 10 tool-calling steps per agent run
 
-## LLM Tools (62 total)
+## LLM Tools (69 total)
 ### Android Device Tools (18)
 android_read_screen, find_element, read_region,
 android_tap, android_long_press, android_swipe, android_type_text,
@@ -154,7 +154,11 @@ This pattern ensures tasks are verifiable, results are communicated, and knowled
 - PostgreSQL JDBC removed (Android compat issue with MethodHandle on API <26) — use HTTP proxy instead
 - Shizuku integration declared but not yet connected
 - nodejs-mobile integration optional — Kotlin-native AI agent works standalone
-- v2.6.0 is latest build
+- v2.7.1 is latest build
+- v2.7.1: Slim system prompt (~70% smaller), heartbeat skips during user chat, screenshot cleanup
+- v2.7.0: Vision-first interaction (look_and_find, look_and_describe), gesture shortcuts (scroll_down/up, swipe_left/right, pull_to_refresh)
+- v2.7.0: Agent operates phone like human: LOOK → TAP → SCROLL → TYPE → ENTER
+- v2.6.6: Fix Gemini models, duplicate google_workspace, app search, market analysis skill
 - v2.6.0: Default free LLM (Pollinations, zero auth), 4 new providers (HuggingFace, SambaNova, Cerebras, Pollinations), 19 providers total
 - v2.6.0: AppAgent explore-then-act (explore_app tool), Search & Act universal pattern
 - v2.6.0: Google OAuth2 auto-refresh (refresh_token + client_id + client_secret), retry on 401

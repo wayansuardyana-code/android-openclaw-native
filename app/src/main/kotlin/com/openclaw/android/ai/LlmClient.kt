@@ -110,8 +110,8 @@ class LlmClient {
 
     private suspend fun callProvider(config: Config, messages: List<Message>, systemPrompt: String?, tools: List<ToolDef>?): LlmResponse {
         return when (config.provider) {
-            "anthropic", "minimax" -> chatAnthropic(config, messages, systemPrompt, tools)
-            else -> chatOpenAI(config, messages, systemPrompt, tools)
+            "anthropic" -> chatAnthropic(config, messages, systemPrompt, tools)
+            else -> chatOpenAI(config, messages, systemPrompt, tools)  // MiniMax + all others use OpenAI-compatible
         }
     }
 

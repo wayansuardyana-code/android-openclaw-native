@@ -561,6 +561,7 @@ Rules:
                         """{"found":false,"error":"Vision API failed: ${e.message?.take(100)?.replace("\"", "'")}"}"""
                     } finally {
                         client.close()
+                        try { file.delete() } catch (_: Exception) {}  // Cleanup screenshot (sensitive data)
                     }
                 }
 
@@ -640,6 +641,7 @@ Format as a structured list. Be precise with coordinates — they will be used f
                         """{"error":"Vision failed: ${e.message?.take(100)?.replace("\"", "'")}"}"""
                     } finally {
                         client.close()
+                        try { file.delete() } catch (_: Exception) {}  // Cleanup screenshot
                     }
                 }
 

@@ -768,8 +768,10 @@ object UtilityTools {
                         }
 
                         // If token expired mid-request, force refresh and retry once
+                        // Check for auth-specific error patterns (not generic "401" which could be in data)
                         if (result.contains("Invalid Credentials", ignoreCase = true) ||
-                            result.contains("401", ignoreCase = true) ||
+                            result.contains("\"code\":401", ignoreCase = true) ||
+                            result.contains("\"status\":401", ignoreCase = true) ||
                             result.contains("UNAUTHENTICATED", ignoreCase = true)) {
                             AgentConfig.googleTokenExpiry = 0  // Force expiry
                             val refreshedToken = getValidGoogleToken()
@@ -878,8 +880,8 @@ object UtilityTools {
             // Block reading app private data
             "/data/data/", "/data/user/"
         )
-        // Normalize: collapse whitespace, remove quotes that could bypass matching
-        val normalized = command.lowercase().replace(Regex("[\\t]+"), " ").replace(Regex("[\"'`]+"), "")
+        // Normalize: collapse ALL whitespace (spaces+tabs), remove quotes that could bypass matching
+        val normalized = command.lowercase().replace(Regex("\\s+"), " ").replace(Regex("[\"'`]+"), "")
         if (blocklist.any { normalized.contains(it) }) {
             return """{"error":"Command blocked for security"}"""
         }
@@ -909,7 +911,7 @@ object UtilityTools {
             .userAgent("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36")
             .header("Accept", "text/html,application/xhtml+xml")
             .timeout(15000)
-            .followRedirects(true)
+            .followRedirects(false)  // SSRF: block redirect to internal IPs
             .ignoreHttpErrors(true)
         val doc = conn.get()
 
@@ -942,7 +944,7 @@ object UtilityTools {
                     .header("Accept", "text/html,application/xhtml+xml")
                     .header("Accept-Language", "en-US,en;q=0.9,id;q=0.8")
                     .timeout(10000)
-                    .followRedirects(true)
+                    .followRedirects(false)  // SSRF: block redirect to internal IPs
                     .ignoreHttpErrors(true)
                 val doc = conn.get()
 

@@ -29,6 +29,8 @@ object ConversationManager {
         "fireworks" to 128_000,
         "openrouter" to 200_000,
         "ollama" to 8_192,
+        "kimi" to 128_000,
+        "moonshot" to 128_000,
         "custom" to 128_000,
     )
 
@@ -81,49 +83,94 @@ object ConversationManager {
     }
 
     /** Check if compaction is needed and do it */
-    fun maybeCompact(provider: String) {
+    @Synchronized fun maybeCompact(provider: String) {
         val limit = getContextLimit(provider)
         val threshold = (limit * COMPACTION_THRESHOLD).toLong()
 
-        if (_tokenCount.value > threshold && _history.size > 6) {
+        if (_tokenCount.value > threshold && _history.size > 8) {
             ServiceState.addLog("Context compaction: ${_tokenCount.value} tokens > ${threshold} threshold")
             compact()
         }
     }
 
-    /** Compact conversation by summarizing older messages */
-    private fun compact() {
-        if (_history.size <= 4) return
+    /**
+     * Hierarchical compaction — preserves more context than naive summarization.
+     *
+     * Instead of summarizing ALL old messages into one blob, this:
+     * 1. Keeps last 6 messages (immediate context)
+     * 2. Extracts key facts from tool results (facts survive compactions)
+     * 3. Summarizes user requests and agent actions separately
+     * 4. Preserves any existing compacted summary (chain of compactions)
+     */
+    @Synchronized private fun compact() {
+        if (_history.size <= 6) return
 
-        // Keep last 4 messages, summarize the rest
-        val toSummarize = _history.dropLast(4)
-        val kept = _history.takeLast(4)
+        val keep = _history.takeLast(6)
+        val old = _history.dropLast(6)
 
-        val summary = buildString {
-            append("[Conversation summary: ")
-            var userCount = 0
-            var assistantCount = 0
-            toSummarize.forEach { msg ->
-                if (msg.role == "user") userCount++
-                else assistantCount++
+        // Extract key facts from tool results in old messages
+        val facts = mutableListOf<String>()
+        old.forEach { msg ->
+            if (msg.role == "user" && msg.content.startsWith("[Tool result for ")) {
+                val toolName = msg.content
+                    .substringAfter("[Tool result for ")
+                    .substringBefore("]")
+                val result = msg.content.substringAfter("]: ").take(100)
+                if (result.length > 20 && !result.startsWith("{\"error\"")) {
+                    facts.add("$toolName: $result")
+                }
             }
-            append("$userCount user messages and $assistantCount assistant responses were compacted. ")
-
-            // Keep key topics
-            val topics = toSummarize
-                .filter { it.role == "user" }
-                .joinToString("; ") { it.content.take(100) }
-            append("Topics discussed: $topics")
-            append("]")
         }
 
+        // Build hierarchical summary
+        val summaryParts = mutableListOf<String>()
+
+        // Part 1: Conversation summary (what was discussed)
+        val userMessages = old.filter { msg ->
+            msg.role == "user" &&
+                !msg.content.startsWith("[Tool result") &&
+                !msg.content.startsWith("[SYSTEM")
+        }
+        val assistantMessages = old.filter { it.role == "assistant" }
+
+        if (userMessages.isNotEmpty()) {
+            summaryParts.add(
+                "User asked: ${userMessages.joinToString("; ") { it.content.take(60) }}"
+            )
+        }
+        if (assistantMessages.isNotEmpty()) {
+            summaryParts.add(
+                "Agent did: ${assistantMessages.joinToString("; ") { it.content.take(60) }}"
+            )
+        }
+
+        // Part 2: Key facts from tool results
+        if (facts.isNotEmpty()) {
+            summaryParts.add(
+                "Key facts discovered:\n${facts.take(10).joinToString("\n") { "- $it" }}"
+            )
+        }
+
+        // Part 3: Preserve any existing compacted summary (chain of compactions)
+        val existingCompaction = old.firstOrNull { msg ->
+            msg.role == "system" && msg.content.startsWith("[Context summary")
+        }
+        if (existingCompaction != null) {
+            summaryParts.add("Previous context: ${existingCompaction.content.take(300)}")
+        }
+
+        val summary = "[Context summary \u2014 earlier conversation compacted]\n${summaryParts.joinToString("\n\n")}"
+        val originalSize = old.size + keep.size
+
         _history.clear()
-        _history.add(LlmClient.Message("user", summary))
-        _history.addAll(kept)
+        _history.add(LlmClient.Message("system", summary))
+        _history.addAll(keep)
 
         // Recalculate token count
         _tokenCount.value = _history.sumOf { estimateTokens(it.content).toLong() }
-        ServiceState.addLog("Compacted to ${_history.size} messages, ${_tokenCount.value} tokens")
+        ServiceState.addLog(
+            "Context compacted: $originalSize \u2192 ${_history.size} messages, ${facts.size} facts preserved"
+        )
     }
 
     /** Clear all history */

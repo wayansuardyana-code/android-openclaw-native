@@ -1,6 +1,6 @@
 # OpenClaw Android Native — PLAN.md
 
-> **Version:** 2.0.0
+> **Version:** 2.3.0
 > **Device:** ADVAN X1 (Android 14, API 34)
 > **Owner:** Wayan
 > **Updated:** 2026-03-25
@@ -66,10 +66,10 @@ Listed below as upcoming phases.
 ## Phase 8.5: Service Connectors Expansion (v2.3)
 
 ### 8.5.1 Search APIs (replace unreliable DuckDuckGo)
-- Brave Search API — dedicated tool, 2K/month free
-- Serper.dev — Google SERP JSON, 2500 credits free
-- Exa API — neural search, research-grade
-- Firecrawl — web scraping as a service, structured data
+- Brave Search API — dedicated tool, 2K/month free ✅ DONE v2.3.0
+- Serper.dev — Google SERP JSON, 2500 credits free (use via http_request)
+- Exa API — neural search, research-grade ✅ DONE v2.3.0
+- Firecrawl — web scraping as a service, structured data ✅ DONE v2.3.0
 
 ### 8.5.2 Communication Gateways
 - Discord Bot — bot token auth (no OAuth needed)

@@ -88,7 +88,7 @@ POST /agent/chat                  # {message, provider, apiKey, model, baseUrl} 
 - POST /agent/chat endpoint accepts {message, provider, apiKey, model, baseUrl}
 - Max 10 tool-calling steps per agent run
 
-## LLM Tools (49 total)
+## LLM Tools (52 total)
 ### Android Device Tools (18)
 android_read_screen, find_element, read_region,
 android_tap, android_long_press, android_swipe, android_type_text,
@@ -99,9 +99,9 @@ android_set_brightness, android_get_clipboard, android_set_clipboard,
 android_wifi_toggle, android_read_notifications,
 take_screenshot, shizuku_command
 
-### Utility Tools (19)
-run_shell_command, web_scrape, web_search, calculator,
-read_file, write_file, list_files, generate_csv, generate_xlsx, generate_pdf,
+### Utility Tools (22)
+run_shell_command, web_scrape, web_search, brave_search, exa_search, firecrawl_scrape,
+calculator, read_file, write_file, list_files, generate_csv, generate_xlsx, generate_pdf,
 http_request, spawn_sub_agent, list_sub_agents,
 read_workspace_file, update_workspace_file,
 send_telegram_message, send_telegram_photo, send_telegram_document,
@@ -154,8 +154,13 @@ This pattern ensures tasks are verifiable, results are communicated, and knowled
 - Shizuku integration declared but not yet connected
 - nodejs-mobile integration optional — Kotlin-native AI agent works standalone
 - APK served via `python3 -m http.server 8899` on VPS for download
-- v2.2.0 is latest build
-- v2.2.0: 49 LLM tools (18 Android device + 19 utility + 7 service + 3 Python)
+- v2.3.0 is latest build
+- v2.3.0: Auto-memory system — agent auto-saves to SQLite without being told
+- v2.3.0: TieredMemoryLoader (L0/L1/L2) — loads relevant memories into system prompt per-message
+- v2.3.0: brave_search, exa_search, firecrawl_scrape tools (52 total tools)
+- v2.3.0: Hierarchical context compaction with fact preservation
+- v2.3.0: Code review fixes — suspend functions (no runBlocking), ID-based dedup, prune counter
+- v2.2.0: 52 LLM tools (18 Android device + 22 utility + 7 service + 3 Python + 2 vision/doc)
 - v2.2.0: 15 LLM providers including Kimi/Moonshot, LLM fallback system
 - v2.2.0: analyze_screenshot (Gemini Vision) tool added
 - v2.2.0: send_telegram_document tool added
@@ -277,6 +282,17 @@ This pattern ensures tasks are verifiable, results are communicated, and knowled
 - MemoryDao: CRUD + prune old unused + access counting
 - This is local semantic vector memory — NOT file-based RAG
 - Embeddings can come from any provider (Cohere, OpenAI, etc.) via http_request tool
+
+## Auto-Memory System (v2.3.0)
+- Agent automatically saves to SQLite WITHOUT being told — three triggers:
+  1. **Conversation turns**: every completed agent run saves user request + response summary + tools used
+  2. **Tool results**: significant fact-producing tools (web_search, http_request, postgres_query, etc.) auto-saved
+  3. **Auto-prune**: when memories exceed 500, removes 30-day-old, zero-access, low-importance entries
+- Importance scoring is automatic: complex tasks (10+ steps) = 0.9, simple Q&A = 0.3
+- Transient tool results (tap, swipe, press_back) are NOT saved — only fact-producing tools
+- Agent can still manually call memory_store for high-value discoveries (preferences, tricks)
+- Failures also auto-saved to SQLite (importance 0.7) alongside memory.md text log
+- Code: AgentLoop.kt — saveToSqlite(), autoMemoryConversation(), autoMemoryFromTool()
 
 ## Google Workspace Integration
 - GWS CLI (googleworkspace/cli) is a Rust binary, NOT suitable for Android embedding

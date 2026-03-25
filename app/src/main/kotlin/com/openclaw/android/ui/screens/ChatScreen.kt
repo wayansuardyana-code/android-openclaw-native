@@ -34,6 +34,7 @@ import androidx.core.content.ContextCompat
 import com.openclaw.android.ai.AgentConfig
 import com.openclaw.android.ai.AgentLoop
 import com.openclaw.android.ai.LlmClient
+import com.openclaw.android.ai.TieredMemoryLoader
 import com.openclaw.android.service.ScreenReaderService
 import com.openclaw.android.util.ServiceState
 import kotlinx.coroutines.launch
@@ -392,6 +393,11 @@ fun ChatScreen() {
                 val bootstrap = com.openclaw.android.ai.Bootstrap.readFile("bootstrap.md")
                 val isFirstMessage = com.openclaw.android.ai.ConversationManager.getHistory().size <= 1
 
+                // Load tiered memory (L0 core + L1 context-relevant) from SQLite
+                val tieredMemory = withContext(Dispatchers.IO) {
+                    try { TieredMemoryLoader.loadForPrompt(actualMessage) } catch (_: Exception) { "" }
+                }
+
                 val systemPrompt = """$soul
 
 ## Tools Reference
@@ -456,13 +462,15 @@ Every task you do follows this universal pattern:
    - Format depends on what user asked: screenshot = visual proof, text = summary/data, both = screenshot + caption
    - If user doesn't specify format, use BOTH: screenshot + brief text summary
 
-**4. LEARN** — Save everything to SQLite memory:
-   - ALWAYS use memory_store for facts, preferences, task outcomes, discoveries
-   - memory_store(content="user prefers Bahasa Indonesia", type="preference", importance=0.8)
+**4. LEARN** — Memory is AUTOMATIC + manual:
+   - AUTO-MEMORY IS ON: Every conversation turn and significant tool result is auto-saved to SQLite
+   - You DON'T need to call memory_store for basic conversation facts — it happens automatically
+   - DO use memory_store for HIGH-VALUE discoveries: user preferences, app-specific tricks, important facts
+   - memory_store(content="user prefers Bahasa Indonesia", type="preference", importance=0.9)
    - memory_store(content="YouTube: must press_back before searching new video", type="skill", importance=0.9)
-   - Use memory_search BEFORE starting tasks to recall relevant past experience
+   - Use memory_search BEFORE starting complex tasks to recall relevant past experience
    - Also save skills to skills.md for system prompt injection
-   - Don't ask permission to save — just do it
+   - Auto-prune runs when memories exceed 500 (removes 30-day-old, unused, low-importance entries)
 
 ## Workspace
 - Read/update your config files (SOUL.md, USER.md, memory.md, skills.md, etc.) via read_workspace_file / update_workspace_file
@@ -471,6 +479,7 @@ ${if (isFirstMessage && bootstrap.isNotBlank()) "\n--- BOOTSTRAP (first message)
 ${if (user.isNotBlank()) "\n--- USER PROFILE ---\n$user" else ""}
 ${if (identity.isNotBlank()) "\n--- IDENTITY ---\n$identity" else ""}
 ${if (memory.isNotBlank()) "\n--- MEMORY ---\n$memory" else ""}
+${if (tieredMemory.isNotBlank()) "\n$tieredMemory" else ""}
 ${if (customPrompt.isNotBlank()) "\n--- CUSTOM INSTRUCTIONS ---\n$customPrompt" else ""}"""
 
                 val response = agentLoop.run(config, actualMessage + fileContext, systemPrompt)

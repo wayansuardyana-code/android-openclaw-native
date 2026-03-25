@@ -74,6 +74,42 @@ object UtilityTools {
             )
         ),
         ToolDef(
+            name = "brave_search",
+            description = "Search the web using Brave Search API. Better than web_search for factual queries. Needs brave API key configured in Settings → Services.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "query" to mapOf("type" to "string", "description" to "Search query"),
+                    "count" to mapOf("type" to "number", "description" to "Number of results (default 5)")
+                ),
+                "required" to listOf("query")
+            )
+        ),
+        ToolDef(
+            name = "exa_search",
+            description = "Neural search using Exa API. Best for research-grade semantic search. Needs exa API key configured in Settings → Services.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "query" to mapOf("type" to "string", "description" to "Search query"),
+                    "num_results" to mapOf("type" to "number", "description" to "Number of results (default 5)"),
+                    "type" to mapOf("type" to "string", "description" to "Search type: keyword or neural (default neural)")
+                ),
+                "required" to listOf("query")
+            )
+        ),
+        ToolDef(
+            name = "firecrawl_scrape",
+            description = "Scrape a webpage and get clean markdown content using Firecrawl. Better than web_scrape for complex pages. Needs firecrawl API key configured in Settings → Services.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "url" to mapOf("type" to "string", "description" to "URL to scrape")
+                ),
+                "required" to listOf("url")
+            )
+        ),
+        ToolDef(
             name = "calculator",
             description = "Evaluate a math expression. Supports: +, -, *, /, ^, sqrt, sin, cos, tan, log, abs, ceil, floor, pi, e. Example: '2 * sin(pi/4) + sqrt(16)'",
             inputSchema = mapOf(
@@ -326,6 +362,9 @@ object UtilityTools {
                 "run_shell_command" -> runShell(args.get("command").asString)
                 "web_scrape" -> webScrape(args.get("url").asString, args.get("selector")?.asString)
                 "web_search" -> webSearch(args.get("query").asString)
+                "brave_search" -> braveSearch(args)
+                "exa_search" -> exaSearch(args)
+                "firecrawl_scrape" -> firecrawlScrape(args)
                 "calculator" -> calculate(args.get("expression").asString)
                 "read_file" -> readFile(args.get("path").asString)
                 "write_file" -> writeFile(args.get("path").asString, args.get("content").asString)
@@ -812,5 +851,109 @@ object UtilityTools {
         val body = response.body().take(4000)
 
         return """{"status":${response.statusCode()},"body":"${body.replace("\"", "\\\"").replace("\n", "\\n")}"}"""
+    }
+
+    private suspend fun braveSearch(args: JsonObject): String {
+        val key = AgentConfig.getKeyForProvider("brave")
+        if (key.isBlank()) return """{"error":"brave API key not configured. Add it in Settings → Services → + → brave"}"""
+
+        val query = args.get("query").asString
+        val count = args.get("count")?.asInt ?: 5
+        val encoded = java.net.URLEncoder.encode(query, "UTF-8")
+        val gson = Gson()
+
+        return try {
+            val resp = sharedHttpClient.get("https://api.search.brave.com/res/v1/web/search?q=$encoded&count=$count") {
+                header("Accept", "application/json")
+                header("X-Subscription-Token", key)
+            }
+            val body = resp.bodyAsText()
+            val json = com.google.gson.JsonParser.parseString(body).asJsonObject
+            val webResults = json.getAsJsonObject("web")?.getAsJsonArray("results")
+            if (webResults == null || webResults.size() == 0) {
+                return """{"query":${gson.toJson(query)},"results":[],"note":"No results found"}"""
+            }
+            val results = webResults.take(count).mapIndexed { i, el ->
+                val obj = el.asJsonObject
+                val title = obj.get("title")?.asString ?: ""
+                val url = obj.get("url")?.asString ?: ""
+                val desc = (obj.get("description")?.asString ?: "").take(300)
+                """{"rank":${i+1},"title":${gson.toJson(title)},"url":${gson.toJson(url)},"description":${gson.toJson(desc)}}"""
+            }
+            """{"query":${gson.toJson(query)},"results":[${results.joinToString(",")}]}"""
+        } catch (e: Exception) {
+            """{"error":"Brave search failed: ${e.message?.replace("\"", "'")}"}"""
+        }
+    }
+
+    private suspend fun exaSearch(args: JsonObject): String {
+        val key = AgentConfig.getKeyForProvider("exa")
+        if (key.isBlank()) return """{"error":"exa API key not configured. Add it in Settings → Services → + → exa"}"""
+
+        val query = args.get("query").asString
+        val numResults = args.get("num_results")?.asInt ?: 5
+        val searchType = args.get("type")?.asString ?: "neural"
+        val gson = Gson()
+
+        return try {
+            val requestBody = com.google.gson.JsonObject().apply {
+                addProperty("query", query)
+                addProperty("numResults", numResults)
+                addProperty("type", searchType)
+            }
+            val resp = sharedHttpClient.post("https://api.exa.ai/search") {
+                contentType(ContentType.Application.Json)
+                header("x-api-key", key)
+                setBody(requestBody.toString())
+            }
+            val body = resp.bodyAsText()
+            val json = com.google.gson.JsonParser.parseString(body).asJsonObject
+            val exaResults = json.getAsJsonArray("results")
+            if (exaResults == null || exaResults.size() == 0) {
+                return """{"query":${gson.toJson(query)},"results":[],"note":"No results found"}"""
+            }
+            val results = exaResults.take(numResults).mapIndexed { i, el ->
+                val obj = el.asJsonObject
+                val title = obj.get("title")?.asString ?: ""
+                val url = obj.get("url")?.asString ?: ""
+                val score = obj.get("score")?.asFloat ?: 0f
+                """{"rank":${i+1},"title":${gson.toJson(title)},"url":${gson.toJson(url)},"score":${"%.3f".format(score)}}"""
+            }
+            """{"query":${gson.toJson(query)},"type":"$searchType","results":[${results.joinToString(",")}]}"""
+        } catch (e: Exception) {
+            """{"error":"Exa search failed: ${e.message?.replace("\"", "'")}"}"""
+        }
+    }
+
+    private suspend fun firecrawlScrape(args: JsonObject): String {
+        val key = AgentConfig.getKeyForProvider("firecrawl")
+        if (key.isBlank()) return """{"error":"firecrawl API key not configured. Add it in Settings → Services → + → firecrawl"}"""
+
+        val url = args.get("url").asString
+        val gson = Gson()
+
+        return try {
+            val requestBody = com.google.gson.JsonObject().apply {
+                addProperty("url", url)
+            }
+            val resp = sharedHttpClient.post("https://api.firecrawl.dev/v1/scrape") {
+                contentType(ContentType.Application.Json)
+                header("Authorization", "Bearer $key")
+                setBody(requestBody.toString())
+            }
+            val body = resp.bodyAsText()
+            val json = com.google.gson.JsonParser.parseString(body).asJsonObject
+            val success = json.get("success")?.asBoolean ?: false
+            if (!success) {
+                val error = json.get("error")?.asString ?: "Unknown error"
+                return """{"error":"Firecrawl failed: ${error.replace("\"", "'")}"}"""
+            }
+            val data = json.getAsJsonObject("data")
+            val markdown = (data?.get("markdown")?.asString ?: "").take(4000)
+            val title = data?.get("metadata")?.asJsonObject?.get("title")?.asString ?: ""
+            """{"url":${gson.toJson(url)},"title":${gson.toJson(title)},"content":${gson.toJson(markdown)}}"""
+        } catch (e: Exception) {
+            """{"error":"Firecrawl scrape failed: ${e.message?.replace("\"", "'")}"}"""
+        }
     }
 }

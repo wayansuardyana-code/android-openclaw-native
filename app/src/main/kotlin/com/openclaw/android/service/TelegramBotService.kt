@@ -197,7 +197,7 @@ class TelegramBotService {
             sendTypingAction(baseUrl, chatId)
 
             val config = AgentConfig.toLlmConfig()
-            val systemPrompt = buildSystemPrompt(senderName)
+            val systemPrompt = buildSystemPrompt(senderName, text)
 
             // Live narration: collect narration changes and send to Telegram periodically
             var lastNarration = ""
@@ -286,8 +286,9 @@ class TelegramBotService {
     /**
      * Build a system prompt with Telegram context.
      * Loads all workspace files to match the richness of the ChatScreen system prompt.
+     * Includes L0/L1 tiered memory from SQLite.
      */
-    private fun buildSystemPrompt(senderName: String): String {
+    private suspend fun buildSystemPrompt(senderName: String, userMessage: String = ""): String {
         val soul = com.openclaw.android.ai.Bootstrap.readFile("SOUL.md")
         val user = com.openclaw.android.ai.Bootstrap.readFile("USER.md")
         val tools = com.openclaw.android.ai.Bootstrap.readFile("TOOLS.md")
@@ -295,6 +296,11 @@ class TelegramBotService {
         val customPrompt = com.openclaw.android.ai.Bootstrap.readFile("system_prompt.md")
         val memory = com.openclaw.android.ai.Bootstrap.readFile("memory.md")
         val skills = com.openclaw.android.ai.Bootstrap.readFile("skills.md")
+
+        // Load tiered memory (L0 core + L1 context-relevant) from SQLite
+        val tieredMemory = try {
+            com.openclaw.android.ai.TieredMemoryLoader.loadForPrompt(userMessage)
+        } catch (_: Exception) { "" }
 
         return """$soul
 
@@ -337,7 +343,7 @@ Every task follows: ACT → OBSERVE → REPORT → LEARN
   - This Telegram chat: reply text (default) or send_telegram_photo for images
   - File output: write_file for CSV/PDF/XLSX
   - Both: screenshot + brief text summary (default when format not specified)
-**LEARN**: Use memory_store to save facts, preferences, outcomes to SQLite. Use memory_search before tasks to recall past experience. Also save skills to skills.md.
+**LEARN**: AUTO-MEMORY IS ON — conversation turns and tool results are auto-saved to SQLite. Use memory_store manually only for HIGH-VALUE discoveries (preferences, tricks, important facts). Use memory_search before complex tasks to recall past experience. Also save skills to skills.md.
 
 ## Workspace
 - Read/update config files via read_workspace_file / update_workspace_file
@@ -345,6 +351,7 @@ Every task follows: ACT → OBSERVE → REPORT → LEARN
 ${if (user.isNotBlank()) "\n--- USER PROFILE ---\n$user" else ""}
 ${if (identity.isNotBlank()) "\n--- IDENTITY ---\n$identity" else ""}
 ${if (memory.isNotBlank()) "\n--- MEMORY ---\n$memory" else ""}
+${if (tieredMemory.isNotBlank()) "\n$tieredMemory" else ""}
 ${if (customPrompt.isNotBlank()) "\n--- CUSTOM INSTRUCTIONS ---\n$customPrompt" else ""}
 
 --- TELEGRAM CONTEXT ---

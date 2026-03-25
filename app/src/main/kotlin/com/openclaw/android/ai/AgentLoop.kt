@@ -9,6 +9,10 @@ import com.openclaw.android.util.NotificationHelper
 import com.openclaw.android.util.ServiceState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import com.openclaw.android.data.AppDatabase
+import com.openclaw.android.data.entity.MemoryEntity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.StringReader
 import java.text.SimpleDateFormat
@@ -176,6 +180,9 @@ class AgentLoop(private val llmClient: LlmClient) {
                         val toolResult = AndroidTools.executeTool(toolName, toolInput)
                         ServiceState.addLog("Agent: tool $toolName returned ${toolResult.take(100)}...")
 
+                        // Auto-memory: save significant tool results as facts
+                        autoMemoryFromTool(toolName, toolInput, toolResult)
+
                         // Narrate the result briefly
                         val narration = narrate(toolName, toolResult)
                         _liveNarration.value = narration
@@ -213,6 +220,7 @@ class AgentLoop(private val llmClient: LlmClient) {
                             _liveNarration.value = "Step $step: $toolName"
                             ServiceState.addLog("Agent: calling tool $toolName")
                             val toolResult = AndroidTools.executeTool(toolName, toolInput)
+                            autoMemoryFromTool(toolName, toolInput, toolResult)
                             results.append("[$toolName]: $toolResult\n")
                         }
 
@@ -254,6 +262,9 @@ class AgentLoop(private val llmClient: LlmClient) {
                 if (step >= 5 && toolsUsed.size >= 3) {
                     autoLearn(userMessage, toolsUsed, step)
                 }
+
+                // Auto-memory: save conversation turn + facts to SQLite
+                autoMemoryConversation(userMessage, content, toolsUsed, step)
 
                 return content
             }
@@ -368,7 +379,7 @@ class AgentLoop(private val llmClient: LlmClient) {
      * Log failed tasks to memory.md so the heartbeat can review and improve.
      * Failures are the MOST valuable data for self-improvement.
      */
-    private fun logFailure(userMessage: String, error: String, toolsUsed: List<String>, step: Int) {
+    private suspend fun logFailure(userMessage: String, error: String, toolsUsed: List<String>, step: Int) {
         try {
             val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date())
             val task = userMessage.take(60).replace("\n", " ")
@@ -393,6 +404,132 @@ class AgentLoop(private val llmClient: LlmClient) {
             }
             target.writeText(updated)
             ServiceState.addLog("Failure logged to memory.md for heartbeat review")
+
+            // Also save failure to SQLite for searchable recall
+            saveToSqlite("FAILED TASK: $task | Error: ${error.take(100)} | Tools: $tools | Step: $step",
+                type = "conversation", importance = 0.7f)
         } catch (_: Exception) {}
+    }
+
+    // ─── AUTO-MEMORY SYSTEM ─────────────────────────────────────────────
+    // Agent automatically saves to SQLite WITHOUT being told.
+    // Three triggers: (1) every conversation turn, (2) significant tool results, (3) periodic prune.
+
+    private var conversationCounter = 0  // For periodic prune (every 20 turns)
+
+    /** Save a memory to SQLite — suspend-safe, no runBlocking */
+    private suspend fun saveToSqlite(content: String, type: String = "general", importance: Float = 0.5f, metadata: String = "{}") {
+        try {
+            val db = AppDatabase.getInstance(OpenClawApplication.instance)
+            val entity = MemoryEntity(
+                content = content,
+                type = type,
+                source = "agent",
+                importance = importance,
+                metadata = metadata
+            )
+            withContext(Dispatchers.IO) {
+                db.memoryDao().insert(entity)
+            }
+        } catch (e: Exception) {
+            ServiceState.addLog("Auto-memory save error: ${e.message?.take(60)}")
+        }
+    }
+
+    /**
+     * Auto-save conversation turn to SQLite.
+     * Called after every completed agent run.
+     * Saves: user request summary + agent response summary + tools used.
+     */
+    private suspend fun autoMemoryConversation(userMessage: String, agentResponse: String, toolsUsed: List<String>, steps: Int) {
+        try {
+            val userSummary = userMessage.take(150).replace("\n", " ").trim()
+            val agentSummary = agentResponse.take(200).replace("\n", " ").trim()
+            val tools = toolsUsed.distinct().joinToString(", ")
+            val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date())
+
+            // Determine importance based on complexity
+            val importance = when {
+                steps >= 10 -> 0.9f       // Complex multi-step task
+                steps >= 5 -> 0.7f        // Moderate task
+                toolsUsed.isNotEmpty() -> 0.5f  // Simple tool use
+                else -> 0.3f              // Simple Q&A
+            }
+
+            val memoryContent = buildString {
+                append("[$timestamp] User: $userSummary")
+                if (tools.isNotEmpty()) append(" | Tools: $tools")
+                append(" | Agent: $agentSummary")
+            }
+
+            saveToSqlite(memoryContent, type = "conversation", importance = importance,
+                metadata = """{"steps":$steps,"tools_count":${toolsUsed.size}}""")
+
+            // Periodic prune: every 20 conversations, check and clean up
+            conversationCounter++
+            if (conversationCounter % 20 == 0) {
+                withContext(Dispatchers.IO) {
+                    val db = AppDatabase.getInstance(OpenClawApplication.instance)
+                    // Lightweight count: fetch 501 to check if over 500, don't load all
+                    val count = db.memoryDao().getTopMemories(501).size
+                    if (count > 500) {
+                        val cutoff = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
+                        db.memoryDao().pruneOldUnused(cutoff)
+                        ServiceState.addLog("Auto-memory: pruned old unused memories (was $count+)")
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            ServiceState.addLog("Auto-memory conversation error: ${e.message?.take(60)}")
+        }
+    }
+
+    /**
+     * Auto-save significant tool results as facts in SQLite.
+     * Only saves tools that produce useful, reusable information.
+     * Skips transient results (tap confirmation, scroll, etc.)
+     */
+    private suspend fun autoMemoryFromTool(toolName: String, toolInput: JsonObject, toolResult: String) {
+        try {
+            // Only save tools that produce factual/reusable results
+            // memory_store/memory_search excluded — don't save memory ops as new memories
+            val factTools = setOf(
+                "web_search", "web_scrape", "http_request",
+                "read_file", "read_workspace_file",
+                "github_api", "vercel_api", "supabase_query", "postgres_query",
+                "run_python", "calculator",
+                "android_read_notifications"
+            )
+
+            // Skip if not a fact-producing tool
+            if (toolName !in factTools) return
+
+            // Skip empty or error results
+            if (toolResult.length < 20) return
+            if (toolResult.startsWith("{\"error\"")) return
+            if (toolResult.startsWith("{\"success\":false")) return
+
+            // Determine type and importance based on tool
+            val (type, importance) = when (toolName) {
+                "web_search" -> "fact" to 0.6f
+                "web_scrape" -> "fact" to 0.5f
+                "http_request" -> "fact" to 0.6f
+                "github_api", "vercel_api" -> "fact" to 0.7f
+                "supabase_query", "postgres_query" -> "fact" to 0.7f
+                "calculator" -> "fact" to 0.4f
+                "android_read_notifications" -> "general" to 0.3f
+                else -> "general" to 0.4f
+            }
+
+            // Build compact memory content
+            val inputHint = toolInput.entrySet().take(2).joinToString(", ") { "${it.key}=${it.value}" }
+            val resultSnippet = toolResult.take(300).replace("\n", " ").trim()
+            val content = "$toolName($inputHint): $resultSnippet"
+
+            saveToSqlite(content, type = type, importance = importance,
+                metadata = """{"tool":"$toolName"}""")
+        } catch (_: Exception) {
+            // Silent — don't disrupt agent flow for memory errors
+        }
     }
 }

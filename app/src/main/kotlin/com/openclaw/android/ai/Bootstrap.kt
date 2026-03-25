@@ -147,7 +147,7 @@ Examples of when to delegate:
 ## Agent: OpenClaw Android
 - **Type**: Primary autonomous agent
 - **Model**: Configured in Settings
-- **Tools**: 26 tools (8 device + 11 utility + 7 service)
+- **Tools**: 52 tools (18 device + 22 utility + 7 service + 3 Python + 2 vision/doc)
 - **Sub-agents**: Can spawn background agents for parallel tasks
 
 ## Workspace Layout
@@ -206,6 +206,11 @@ agent_config/
 **Scrolling:** swipe(540, 1500, 540, 500) = scroll down. swipe(540, 500, 540, 1500) = scroll up.
 **Back:** press_back(). **Home:** press_home().
 **Type:** type_text only works when text field is focused. Tap the field first.
+
+## Search APIs (need API keys in Settings → Services)
+- brave_search: WHEN user asks to search AND brave key is configured → use brave_search instead of web_search for better results
+- exa_search: WHEN user needs deep research, academic papers, semantic search → use exa_search for research-grade results
+- firecrawl_scrape: WHEN user needs clean content from a complex webpage → use firecrawl_scrape instead of web_scrape
 
 ## Credential Notes
 - API tokens are stored in Settings → saved per-provider

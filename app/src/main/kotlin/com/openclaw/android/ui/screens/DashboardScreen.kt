@@ -69,11 +69,41 @@ object TaskBoard {
 
 @Composable
 fun DashboardScreen() {
+    var selectedTab by remember { mutableIntStateOf(0) }
+    val tabs = listOf("Overview", "Task Board")
+
+    Column(Modifier.fillMaxSize().background(BG)) {
+        // Tab row
+        TabRow(
+            selectedTabIndex = selectedTab,
+            containerColor = SURFACE,
+            contentColor = CYAN,
+            divider = { Divider(color = BORDER, thickness = 1.dp) }
+        ) {
+            tabs.forEachIndexed { index, title ->
+                Tab(
+                    selected = selectedTab == index,
+                    onClick = { selectedTab = index },
+                    text = { Text(title, fontFamily = FontFamily.Monospace, fontSize = 13.sp, fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal) },
+                    selectedContentColor = CYAN,
+                    unselectedContentColor = TEXT2
+                )
+            }
+        }
+
+        when (selectedTab) {
+            0 -> OverviewTab()
+            1 -> TaskBoardTab()
+        }
+    }
+}
+
+@Composable
+private fun OverviewTab() {
     val isRunning by ServiceState.isRunning.collectAsState()
     val logs by ServiceState.logs.collectAsState()
     val context = LocalContext.current
 
-    // Hardware stats - refresh every 5 seconds
     var ramUsed by remember { mutableStateOf("--") }
     var ramTotal by remember { mutableStateOf("--") }
     var storageUsed by remember { mutableStateOf("--") }
@@ -84,44 +114,34 @@ fun DashboardScreen() {
 
     LaunchedEffect(Unit) {
         while (true) {
-            // RAM
             val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
             val mi = ActivityManager.MemoryInfo()
             am.getMemoryInfo(mi)
             val totalMb = mi.totalMem / (1024 * 1024)
             val availMb = mi.availMem / (1024 * 1024)
-            val usedMb = totalMb - availMb
-            ramUsed = "${usedMb}MB"
-            ramTotal = "${totalMb}MB"
+            ramUsed = "${totalMb - availMb}MB"; ramTotal = "${totalMb}MB"
 
-            // Storage
             val stat = StatFs(Environment.getDataDirectory().path)
             val totalGb = (stat.blockSizeLong * stat.blockCountLong) / (1024 * 1024 * 1024)
             val freeGb = (stat.blockSizeLong * stat.availableBlocksLong) / (1024 * 1024 * 1024)
-            storageUsed = "${totalGb - freeGb}GB"
-            storageFree = "${freeGb}GB"
+            storageUsed = "${totalGb - freeGb}GB"; storageFree = "${freeGb}GB"
 
-            // Battery
             val bm = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
             batteryLevel = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
             batteryCharging = bm.isCharging
-
             delay(5000)
         }
     }
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize().background(BG).padding(horizontal = 16.dp),
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = PaddingValues(vertical = 16.dp)
+        contentPadding = PaddingValues(vertical = 12.dp)
     ) {
-        // Header
         item {
-            Text("Mission Control", color = TEXT, fontSize = 24.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-            Text("OpenClaw Android v0.9.0", color = TEXT2, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+            Text("Mission Control", color = TEXT, fontSize = 22.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+            Text("OpenClaw Android v2.4.0", color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
         }
-
-        // ── Status Grid ──
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 StatusChip(Modifier.weight(1f), "Gateway", if (isRunning) "ONLINE" else "OFF", if (isRunning) GREEN else RED)
@@ -134,8 +154,6 @@ fun DashboardScreen() {
                 StatusChip(Modifier.weight(1f), "Battery", "${batteryLevel}%${if (batteryCharging) " ⚡" else ""}", if (batteryLevel > 20) GREEN else RED)
             }
         }
-
-        // ── Hardware Monitor ──
         item { SectionHeader("HARDWARE") }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(10.dp)) {
@@ -147,44 +165,22 @@ fun DashboardScreen() {
                 }
             }
         }
-
-        // ── Kanban Board ──
-        item { SectionHeader("TASK BOARD") }
-        item {
-            val pending = TaskBoard.tasks.filter { it.status == "pending" }
-            val active = TaskBoard.tasks.filter { it.status == "active" }
-            val done = TaskBoard.tasks.filter { it.status == "done" }
-
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                KanbanColumn("Pending", pending, ORANGE, 140.dp)
-                KanbanColumn("Active", active, CYAN, 140.dp)
-                KanbanColumn("Done", done, GREEN, 140.dp)
-            }
-        }
-        item {
-            Text("Tasks are auto-managed by OpenClaw agent. Plan via chat → Pending → Active → Done.",
-                color = TEXT2, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-        }
-
-        // ── Stats ──
         item { SectionHeader("STATS") }
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatCard(Modifier.weight(1f), "Tools", "22", CYAN)
-                StatCard(Modifier.weight(1f), "Providers", "13", PURPLE)
+                StatCard(Modifier.weight(1f), "Tools", "56", CYAN)
+                StatCard(Modifier.weight(1f), "Providers", "15", PURPLE)
                 StatCard(Modifier.weight(1f), "Uptime", if (isRunning) "Active" else "—", GREEN)
             }
         }
-
-        // ── Activity ──
         item { SectionHeader("RECENT ACTIVITY") }
         item {
-            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF010409)), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth().height(150.dp)) {
+            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF010409)), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth().height(180.dp)) {
                 if (logs.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No activity", color = Color(0xFF484F58), fontFamily = FontFamily.Monospace, fontSize = 12.sp) }
                 } else {
                     LazyColumn(Modifier.padding(8.dp)) {
-                        items(logs.takeLast(15)) { log ->
+                        items(logs.takeLast(20)) { log ->
                             val color = when {
                                 log.lowercase().let { it.contains("error") || it.contains("fail") } -> RED
                                 log.lowercase().let { it.contains("started") || it.contains("success") } -> GREEN
@@ -193,6 +189,53 @@ fun DashboardScreen() {
                             }
                             Text(log, color = color, fontFamily = FontFamily.Monospace, fontSize = 10.sp, lineHeight = 14.sp)
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TaskBoardTab() {
+    val pending = TaskBoard.tasks.filter { it.status == "pending" }
+    val active = TaskBoard.tasks.filter { it.status == "active" }
+    val done = TaskBoard.tasks.filter { it.status == "done" }
+
+    Column(Modifier.fillMaxSize().padding(12.dp)) {
+        Text("Task Board", color = TEXT, fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+        Spacer(Modifier.height(4.dp))
+        Text("Auto-managed by Nate. Plan via chat → Pending → Active → Done.", color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+        Spacer(Modifier.height(12.dp))
+
+        // Full-width kanban columns
+        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            KanbanColumnFull("Pending", pending, ORANGE, Modifier.weight(1f))
+            KanbanColumnFull("Active", active, CYAN, Modifier.weight(1f))
+            KanbanColumnFull("Done", done, GREEN, Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+fun KanbanColumnFull(title: String, tasks: List<KanbanTask>, color: Color, modifier: Modifier = Modifier) {
+    Card(colors = CardDefaults.cardColors(containerColor = SURFACE), shape = RoundedCornerShape(10.dp), modifier = modifier.fillMaxHeight()) {
+        Column(Modifier.padding(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(8.dp).background(color, RoundedCornerShape(4.dp)))
+                Spacer(Modifier.width(6.dp))
+                Text(title, color = color, fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                Spacer(Modifier.weight(1f))
+                Text("${tasks.size}", color = TEXT2, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+            }
+            Spacer(Modifier.height(6.dp))
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (tasks.isEmpty()) {
+                    item { Text("—", color = Color(0xFF484F58), fontSize = 11.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(4.dp)) }
+                }
+                items(tasks) { task ->
+                    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF010409)), shape = RoundedCornerShape(6.dp), modifier = Modifier.fillMaxWidth()) {
+                        Text(task.title, color = TEXT, fontSize = 11.sp, fontFamily = FontFamily.Monospace, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(8.dp))
                     }
                 }
             }

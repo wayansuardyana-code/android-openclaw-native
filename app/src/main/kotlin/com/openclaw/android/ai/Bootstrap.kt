@@ -361,8 +361,37 @@ http_request(method="GET", url="https://is.gd/create.php?format=json&url=LONG_UR
 - Gmail: com.google.android.gm
 - Google Maps: com.google.android.apps.maps
 - Settings: com.android.settings
+- Shopee: com.shopee.id
+- ShopeeFood: com.shopee.id (same app, food section)
 - Camera: (varies by device)
 - File Manager: (varies by device)
+
+## Shopee Interaction Guide (com.shopee.id)
+### Search & Browse
+1. open_app("com.shopee.id") → home screen
+2. find_element("Cari") or find_element("Search") → tap search bar
+3. type_text("keyword") → android_press_enter → results appear
+4. Scroll through results: android_swipe(540, 1500, 540, 500)
+5. Tap product card to view details
+
+### Add to Cart (SAFE — no purchase)
+1. On product page: find_element("Masukkan Keranjang") or find_element("Add to Cart")
+2. Tap it → variant picker may appear → select variant → confirm
+3. find_element("Keranjang") to verify item added
+
+### GUARDRAIL — PURCHASE REQUIRES HUMAN APPROVAL
+- **NEVER tap "Beli Sekarang" / "Checkout" / "Bayar" without asking the user first**
+- **NEVER confirm payment, enter PIN, or complete any transaction**
+- **STOP and ASK: "Item sudah di keranjang. Mau checkout? (Rp XXX)"**
+- Safe actions: search, browse, add to cart, check price, compare products
+- Unsafe actions (NEED APPROVAL): checkout, buy, pay, enter PIN, confirm order
+
+### ShopeeFood
+1. open_app("com.shopee.id") → tap "ShopeeFood" or "Makanan" on home
+2. If not visible: find_element("ShopeeFood") or scroll down to find it
+3. Browse restaurants: scroll through list
+4. Tap restaurant → browse menu → tap "Tambah" to add items
+5. **GUARDRAIL: STOP before "Pesan Sekarang" — ask user to confirm order + address**
 
 ## App Interaction Patterns (how to use primitives in real apps)
 

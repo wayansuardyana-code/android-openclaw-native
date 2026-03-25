@@ -23,7 +23,7 @@ import com.openclaw.android.util.PermissionHelper
 
 sealed class NavTab(val label: String, val icon: ImageVector) {
     data object Chat : NavTab("Chat", Icons.Default.Chat)
-    data object Dashboard : NavTab("Home", Icons.Default.Dashboard)
+    data object Dashboard : NavTab("Dashboard", Icons.Default.Dashboard)
     data object Connectors : NavTab("Connect", Icons.Default.Extension)
     data object Files : NavTab("Files", Icons.Default.Description)
     data object Logs : NavTab("Logs", Icons.Default.Terminal)

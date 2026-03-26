@@ -417,72 +417,22 @@ fun ChatScreen() {
                 // TOOLS.md is huge — only load on first message, skip later (tool defs are in tool calling already)
                 val identity = com.openclaw.android.ai.Bootstrap.readFile("identity.md")
                 val customPrompt = com.openclaw.android.ai.Bootstrap.readFile("system_prompt.md")
-                val skills = com.openclaw.android.ai.Bootstrap.readFile("skills.md")
-                val bootstrap = com.openclaw.android.ai.Bootstrap.readFile("bootstrap.md")
-                val isFirstMessage = com.openclaw.android.ai.ConversationManager.getHistory().size <= 1
-
-                // Load tiered memory (L0 core + L1 context-relevant) from SQLite
-                val tieredMemory = withContext(Dispatchers.IO) {
-                    try { TieredMemoryLoader.loadForPrompt(actualMessage) } catch (_: Exception) { "" }
-                }
-
-                // Cap skills to save tokens (skills.md can grow to 10K+)
-                val cappedSkills = if (skills.length > 1000) skills.take(1000) + "\n...(truncated)" else skills
+                // Skip heavy files — tool defs already in tool calling, memory in tiered loader
+                // Only load bootstrap on truly first message ever (not per-session)
+                val isFirstEver = !com.openclaw.android.ai.Bootstrap.readFile("USER.md").contains("name")
+                val bootstrap = if (isFirstEver) com.openclaw.android.ai.Bootstrap.readFile("bootstrap.md").take(500) else ""
 
                 val systemPrompt = """$soul
+RULE: ALWAYS call tools. NEVER reply text-only for action requests. NEVER stop mid-task. NEVER ask "mau lanjut?". Just DO IT.
 
-## RULE #1: ALWAYS USE TOOLS. NEVER JUST REPLY WITH TEXT FOR ACTION REQUESTS.
-If user asks to DO something → call a tool. No exceptions. Text-only response = FAILURE.
-
-## How You Operate (VISION-FIRST)
-- **LOOK**: look_and_find("target") → returns {x,y} coordinates. Works on ALL apps.
-- **TAP**: android_tap(x,y)
-- **SCROLL**: scroll_down / scroll_up
-- **SWIPE**: swipe_left / swipe_right
-- **TYPE**: android_type_text("text") + android_press_enter
-- **BACK**: android_press_back | **HOME**: android_press_home
-- **OPEN APP**: android_open_app("app name or package")
-
-## Core Pattern: LOOK → ACT → VERIFY (repeat)
-1. **LOOK**: look_and_find("search bar") → get {x,y}
-2. **ACT**: android_tap(x,y)
-3. **VERIFY**: look_and_find("expected result") → confirm state changed
-4. If verify fails → retry or try different approach
-5. Repeat until task complete
-
-Example: search flashdisk on Shopee:
-- look_and_find("search bar") → tap(x,y) → look_and_find("search input focused") → type_text("flashdisk") → press_enter → look_and_find("product card") → tap → look_and_find("Add to Cart") → tap → look_and_find("cart icon with badge") → DONE
-
-**CRITICAL RULES:**
-- VERIFY after EVERY tap. Don't assume it worked — check with look_and_find.
-- If not found: scroll_down → look_and_find again.
-- If wrong screen: press_back → retry.
-- NEVER give up. Use all 25 steps.
-- NEVER stop mid-task to ask "mau lanjut?". Just DO IT until done.
-- For payments/passwords: ASK first. Everything else: just act.
-- Do NOT re-open an app you're already in. Check current screen first.
-
-## Auto-Trigger Skills (use the RIGHT tool for the job)
-- User says "buat dokumen/report/surat" → run_python with python-docx (DOCX)
-- User says "buat presentasi/slides/PPT" → run_python with python-pptx (PPTX)
-- User says "buat spreadsheet/Excel/tabel" → run_python with openpyxl (XLSX) or generate_xlsx
-- User says "buat PDF/invoice/receipt" → run_python with reportlab (PDF) or generate_pdf
-- User says "convert file" → run_python with markitdown
-- User says "buat infographic/poster" → run_python with Pillow infographic generator
-- User says "analisa data/chart/grafik" → run_python with pandas + matplotlib
-- User says "analisa crypto/saham/market" → http_request to CoinGecko/Yahoo Finance APIs
-- **ALWAYS pip_install the package first** before importing. Packages persist after first install.
-- **Save output to** /data/data/com.openclaw.android/files/documents/ then tell user the path or send via Telegram.
-- **If Python fails** (SELinux, permission denied) → use generate_xlsx/generate_csv/generate_pdf (Kotlin-native, always works).
-- For DOCX/PPTX without Python → create the content as markdown, save as .md, tell user to open with Google Docs.
-${if (cappedSkills.isNotBlank()) "\n## Skills\n$cappedSkills" else ""}
-${if (isFirstMessage && bootstrap.isNotBlank()) "\n$bootstrap" else ""}
-${if (user.isNotBlank()) "\n--- USER ---\n$user" else ""}
-${if (identity.isNotBlank()) "\n--- IDENTITY ---\n$identity" else ""}
-${if (tieredMemory.isNotBlank()) "\n$tieredMemory" else ""}
+VISION-FIRST: look_and_find("target") → tap(x,y) → verify with look_and_find. Repeat until done.
+Tools: look_and_find, android_tap, scroll_down/up, swipe_left/right, android_type_text, android_press_enter/back/home, android_open_app("name").
+If not found: scroll_down → look_and_find again. Wrong screen: press_back. Use all 25 steps. Payments: ASK first.
+${if (bootstrap.isNotBlank()) "\n$bootstrap" else ""}
+${if (user.isNotBlank()) "\n$user" else ""}
+${if (identity.isNotBlank()) "\n$identity" else ""}
 ${if (customPrompt.isNotBlank()) "\n$customPrompt" else ""}
-
-provider=$activeProvider model=${config.model} v${com.openclaw.android.BuildConfig.VERSION_NAME} ${android.os.Build.MODEL}"""
+$activeProvider/${ config.model} v${com.openclaw.android.BuildConfig.VERSION_NAME}"""
 
                 val response = agentLoop.run(config, actualMessage + fileContext, systemPrompt)
                 ChatState.addMessage(ChatMessage("assistant", response))

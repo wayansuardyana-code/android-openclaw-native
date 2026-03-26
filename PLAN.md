@@ -35,13 +35,14 @@
 - Database migration fix (chat history survives APK updates)
 - MiniMax routing fix (OpenAI-compatible, not Anthropic)
 
-### VPS Replacement Roadmap (researched, feasible without root)
-**Phase 1 — Linux Environment** (next)
-- Embed Termux-style bootstrap (50MB zip with bash, coreutils, core tools)
-- Implement linker bypass (/system/bin/linker64) for W^X on Android 10+
-- Package manager (apt/apk) for installing more tools
+### VPS Replacement Roadmap
+**Phase 1 — Linux Environment** ✅ DONE (v3.0.0)
+- PRoot + Alpine Linux rootfs (~7MB)
+- Linker bypass for Android 10+ W^X
+- apk package manager (10,000+ packages)
+- setup_linux, run_in_linux, linux_pkg_install tools
 
-**Phase 2 — Tunneling**
+**Phase 2 — Tunneling** (NEXT)
 - Ship cloudflared aarch64 binary (free Cloudflare Tunnel)
 - manage_tunnel tool: create/start/stop tunnels
 - Phone becomes publicly accessible server (HTTPS, custom domain)
@@ -51,10 +52,21 @@
 - Manage fleet of phones (each running OpenClaw/Nate)
 - SSH tunnel to each phone, task delegation, monitoring
 
-**Phase 4 — PRoot Linux** (optional power mode)
-- Full Alpine/Debian in proot (no root needed)
-- Docker-like workflows, complex build systems
+**Phase 4 — Full Termux Bootstrap** (optional power mode)
+- Embed full Termux bootstrap (~50MB) instead of PRoot+Alpine
+- Native package performance (no proot overhead)
 - Proven by tiny_computer (2.9K stars)
+
+### What's Left To Do (priority order)
+1. **Streaming LLM responses** — show tokens as they arrive in chat
+2. **Agent auto-continue** — don't stop after 25 steps, auto-spawn continuation seamlessly
+3. **Cloudflare Tunnel** — phone as public server (Phase 2)
+4. **On-device model (Gemma 3n)** — offline capability
+5. **In-app Google OAuth flow** — no manual token paste
+6. **Web dashboard** — remote control via Vercel
+7. **Task board integration** — agent creates tasks visible in kanban
+8. **Improve Shopee/e-commerce skill** — save successful patterns, avoid known failures
+9. **Multi-phone fleet** — Mission Control (Phase 3)
 - Kotlin + Jetpack Compose native app
 - AccessibilityService (screen control, tap, swipe, type, long press, scroll)
 - NotificationListenerService

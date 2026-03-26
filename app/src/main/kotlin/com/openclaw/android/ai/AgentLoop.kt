@@ -155,6 +155,7 @@ class AgentLoop(private val llmClient: LlmClient) {
         try {
             while (step < maxSteps) {
                 step++
+                if (step > maxSteps) break  // Safety: prevent overshoot from continue paths
                 ServiceState.addLog("Agent: step $step/$maxSteps")
 
                 val response = llmClient.chat(config, messages, systemPrompt, tools)

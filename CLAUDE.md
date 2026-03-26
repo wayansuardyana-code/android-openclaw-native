@@ -155,8 +155,10 @@ This pattern ensures tasks are verifiable, results are communicated, and knowled
 - Shizuku integration declared but not yet connected
 - nodejs-mobile integration optional — Kotlin-native AI agent works standalone
 - Repo is PRIVATE (set 2026-03-26) — will go public when ready for open source launch
-- v3.0.3 is latest stable build — FIRST SUCCESSFUL E-COMMERCE INTERACTION (Shopee add-to-cart via Telegram)
-- v3.0.3: Security audit pass — embedded tool loop cap, prompt injection protection, PRoot env fix, Node/Terminal blocklists
+- v3.0.5 is latest stable build — FIRST SUCCESSFUL E-COMMERCE INTERACTION (Shopee add-to-cart via Telegram)
+- v3.0.5: LOOK→ACT→VERIFY pattern, auto-continue nudge (3x), step counter safety
+- v3.0.4: Auto-continue nudging on any step when task incomplete
+- v3.0.3: Security audit pass — embedded tool loop cap, prompt injection protection, PRoot env fix
 - v3.0.2: Execute embedded tool calls from text responses (MiniMax/Pollinations), export logs to Downloads
 - v3.0.1: Robust 4-strategy coordinate parsing, vision timeout 60s, export logs button
 - v3.0.0: Linux environment (PRoot + Alpine, 10K+ packages), User Guide HTML, 76 tools

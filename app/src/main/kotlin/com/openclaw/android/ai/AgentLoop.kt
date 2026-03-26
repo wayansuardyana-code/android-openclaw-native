@@ -361,16 +361,24 @@ class AgentLoop(private val llmClient: LlmClient) {
      * Used to nudge the agent when it replies with text instead of tool calls.
      */
     private fun looksLikeActionRequest(msg: String): Boolean {
-        val lower = msg.lowercase()
+        val lower = msg.lowercase().trim()
+        // Explicit stop/cancel signals — NOT action requests
+        val stopWords = listOf("stop", "berhenti", "cancel", "udah", "cukup", "gajelas", "gagal", "salah", "wrong")
+        if (stopWords.any { lower == it || lower.startsWith("$it ") }) return false
+        // Short encouragement messages — NOT action requests (user is saying "go on")
+        val encourageWords = listOf("ayo", "ayok", "ayokk", "gas", "cmon", "go", "go on", "lanjut", "mana", "terus", "oke", "ok", "yes", "sip")
+        if (encourageWords.any { lower == it }) return false
+
         val actionWords = listOf(
             "buka", "open", "cari", "search", "scroll", "swipe", "tap", "klik", "click",
-            "play", "pause", "stop", "next", "back", "home", "type", "ketik", "tulis",
+            "play", "pause", "next", "back", "home", "type", "ketik", "tulis",
             "kirim", "send", "download", "install", "screenshot", "foto", "volume",
             "nyalakan", "matikan", "tutup", "close", "refresh", "update", "hapus", "delete",
             "copy", "paste", "share", "forward", "reply", "check", "cek", "liat", "lihat",
             "tolong", "please", "bantu", "help me", "carikan", "bukain", "nyalain", "matiin",
             "scroll atas", "scroll bawah", "geser", "tekan", "pencet", "enter",
-            "navigate", "go to", "pergi ke", "masuk ke", "buat", "create", "generate", "bikin"
+            "navigate", "go to", "pergi ke", "masuk ke", "buat", "create", "generate", "bikin",
+            "masukkin", "masukin", "taruh", "add to cart", "checkout", "cariin"
         )
         return actionWords.any { lower.contains(it) }
     }

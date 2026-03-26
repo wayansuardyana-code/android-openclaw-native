@@ -270,11 +270,29 @@ class AgentLoop(private val llmClient: LlmClient) {
                     try {
                         // Extract input/parameters from the embedded JSON
                         val inputJson = JsonObject()
-                        // Extract x,y for tap/swipe
+                        // Extract x,y for tap
                         val xVal = Regex("\"x\"\\s*[>:]\\s*(\\d+)").find(content)?.groupValues?.get(1)?.toFloatOrNull()
                         val yVal = Regex("\"y\"\\s*[>:]\\s*(\\d+)").find(content)?.groupValues?.get(1)?.toFloatOrNull()
                         if (xVal != null) inputJson.addProperty("x", xVal)
                         if (yVal != null) inputJson.addProperty("y", yVal)
+                        // Extract x1,y1,x2,y2 for swipe
+                        val x1Val = Regex("\"x1\"\\s*[>:]\\s*(\\d+)").find(content)?.groupValues?.get(1)?.toFloatOrNull()
+                        val y1Val = Regex("\"y1\"\\s*[>:]\\s*(\\d+)").find(content)?.groupValues?.get(1)?.toFloatOrNull()
+                        val x2Val = Regex("\"x2\"\\s*[>:]\\s*(\\d+)").find(content)?.groupValues?.get(1)?.toFloatOrNull()
+                        val y2Val = Regex("\"y2\"\\s*[>:]\\s*(\\d+)").find(content)?.groupValues?.get(1)?.toFloatOrNull()
+                        if (x1Val != null) inputJson.addProperty("x1", x1Val)
+                        if (y1Val != null) inputJson.addProperty("y1", y1Val)
+                        if (x2Val != null) inputJson.addProperty("x2", x2Val)
+                        if (y2Val != null) inputJson.addProperty("y2", y2Val)
+                        // Extract query for find_element
+                        val queryVal = Regex("\"query\"\\s*[>:]\\s*\"([^\"]+)\"").find(content)?.groupValues?.get(1)
+                        if (queryVal != null) inputJson.addProperty("query", queryVal)
+                        // Extract command for run_in_linux/run_shell
+                        val cmdVal = Regex("\"command\"\\s*[>:]\\s*\"([^\"]+)\"").find(content)?.groupValues?.get(1)
+                        if (cmdVal != null) inputJson.addProperty("command", cmdVal)
+                        // Extract code for run_python/run_node
+                        val codeVal = Regex("\"code\"\\s*[>:]\\s*\"([^\"]+)\"").find(content)?.groupValues?.get(1)
+                        if (codeVal != null) inputJson.addProperty("code", codeVal)
                         // Extract text for type_text
                         val textVal = Regex("\"text\"\\s*[>:]\\s*\"([^\"]+)\"").find(content)?.groupValues?.get(1)
                         if (textVal != null) inputJson.addProperty("text", textVal)

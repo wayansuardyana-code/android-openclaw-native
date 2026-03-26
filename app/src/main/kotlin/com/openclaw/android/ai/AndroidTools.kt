@@ -280,6 +280,30 @@ object AndroidTools {
             )
         ),
         ToolDef(
+            name = "tap_element",
+            description = "ALL-IN-ONE: Find element by description → tap it → verify tap worked. Does look_and_find + tap + verify in ONE call. Use this as your PRIMARY interaction tool. Example: tap_element('search bar') → finds it, taps it, confirms it opened. Much faster than calling look_and_find then android_tap separately.",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "target" to mapOf("type" to "string", "description" to "What to tap: 'search bar', 'Buy button', 'Crypto tab', etc."),
+                    "verify" to mapOf("type" to "string", "description" to "Optional: what to expect after tap (e.g. 'search input focused', 'product page')")
+                ),
+                "required" to listOf("target")
+            )
+        ),
+        ToolDef(
+            name = "type_and_submit",
+            description = "ALL-IN-ONE: Find input field → tap it → type text → press enter. Does look_and_find + tap + type + enter in ONE call. Example: type_and_submit('flashdisk 16GB', 'search bar')",
+            inputSchema = mapOf(
+                "type" to "object",
+                "properties" to mapOf(
+                    "text" to mapOf("type" to "string", "description" to "Text to type"),
+                    "field" to mapOf("type" to "string", "description" to "Optional: input field to find first (e.g. 'search bar'). If omitted, types into current focus.")
+                ),
+                "required" to listOf("text")
+            )
+        ),
+        ToolDef(
             name = "look_and_describe",
             description = "Take screenshot and describe everything visible on screen. Returns full text description with element positions. Use when you need to understand the current screen layout before acting.",
             inputSchema = mapOf("type" to "object", "properties" to emptyMap<String, Any>())
@@ -443,6 +467,86 @@ NOTE: This app ($pkg) has NO accessibility elements — it may use Flutter/React
                     val newVol = audioManager.getStreamVolume(stream)
                     """{"success":true,"stream":"$streamName","volume":$newVol,"max":$maxVol}"""
                 }
+                // ── ALL-IN-ONE TOOLS (eyes + hands combined) ──
+                "tap_element" -> {
+                    val target = args.get("target")?.asString ?: return """{"error":"Missing 'target'"}"""
+                    val verifyTarget = args.get("verify")?.asString
+
+                    // Step 1: Find the element using look_and_find
+                    val findArgs = JsonObject().apply { addProperty("target", target) }
+                    val findResult = executeTool("look_and_find", findArgs)
+                    ServiceState.addLog("tap_element: find → ${findResult.take(100)}")
+
+                    val findJson = try { com.google.gson.JsonParser.parseString(findResult).asJsonObject } catch (_: Exception) {
+                        return """{"success":false,"error":"Could not find '$target'","find_result":${gson.toJson(findResult.take(200))}}"""
+                    }
+
+                    val found = findJson.get("found")?.asBoolean ?: false
+                    if (!found) {
+                        val desc = findJson.get("description")?.asString ?: "Element not found"
+                        return """{"success":false,"target":${gson.toJson(target)},"error":"Not found: $desc"}"""
+                    }
+
+                    val x = findJson.get("x")?.asFloat ?: return """{"success":false,"error":"No x coordinate"}"""
+                    val y = findJson.get("y")?.asFloat ?: return """{"success":false,"error":"No y coordinate"}"""
+
+                    // Step 2: Tap it
+                    val reader = ScreenReaderService.instance ?: return """{"error":"Accessibility not enabled"}"""
+                    val tapSuccess = suspendCancellableCoroutine<Boolean> { cont ->
+                        reader.tap(x, y) { result -> cont.resume(result) }
+                    }
+                    ServiceState.addLog("tap_element: tapped ($x, $y) → $tapSuccess")
+
+                    // Step 3: Brief delay for UI to respond
+                    delay(500)
+
+                    // Step 4: Verify (optional — if verify target provided, check if it appeared)
+                    var verified = true
+                    var verifyDesc = ""
+                    if (verifyTarget != null) {
+                        val verifyArgs = JsonObject().apply { addProperty("target", verifyTarget) }
+                        val verifyResult = executeTool("look_and_find", verifyArgs)
+                        val verifyJson = try { com.google.gson.JsonParser.parseString(verifyResult).asJsonObject } catch (_: Exception) { null }
+                        verified = verifyJson?.get("found")?.asBoolean ?: false
+                        verifyDesc = verifyJson?.get("description")?.asString ?: ""
+                    }
+
+                    """{"success":true,"target":${gson.toJson(target)},"x":$x,"y":$y,"tapped":$tapSuccess,"verified":$verified${if (verifyDesc.isNotBlank()) ",\"verify_desc\":${gson.toJson(verifyDesc)}" else ""}}"""
+                }
+
+                "type_and_submit" -> {
+                    val text = args.get("text")?.asString ?: return """{"error":"Missing 'text'"}"""
+                    val field = args.get("field")?.asString
+
+                    val reader = ScreenReaderService.instance ?: return """{"error":"Accessibility not enabled"}"""
+
+                    // Step 1: Find and tap the input field (if specified)
+                    if (field != null) {
+                        val findArgs = JsonObject().apply { addProperty("target", field) }
+                        val findResult = executeTool("look_and_find", findArgs)
+                        val findJson = try { com.google.gson.JsonParser.parseString(findResult).asJsonObject } catch (_: Exception) { null }
+                        val found = findJson?.get("found")?.asBoolean ?: false
+                        if (found) {
+                            val x = findJson?.get("x")?.asFloat ?: 540f
+                            val y = findJson?.get("y")?.asFloat ?: 190f
+                            suspendCancellableCoroutine<Boolean> { cont ->
+                                reader.tap(x, y) { result -> cont.resume(result) }
+                            }
+                            delay(300)
+                        }
+                    }
+
+                    // Step 2: Type the text
+                    val typeSuccess = reader.typeText(text)
+                    delay(200)
+
+                    // Step 3: Press enter
+                    val enterSuccess = reader.pressEnter()
+
+                    ServiceState.addLog("type_and_submit: '$text' → type=$typeSuccess, enter=$enterSuccess")
+                    """{"success":true,"text":${gson.toJson(text)},"typed":$typeSuccess,"submitted":$enterSuccess}"""
+                }
+
                 // ── VISION-FIRST TOOLS (the "eyes") ──
                 "look_and_find" -> {
                     if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {
@@ -520,16 +624,33 @@ Rules:
                         })
                     }
 
-                    val client = io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
-                        engine { config { readTimeout(15, java.util.concurrent.TimeUnit.SECONDS) } }
-                    }
-                    try {
-                        val resp = client.post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$geminiKey") {
-                            contentType(ContentType.Application.Json)
-                            setBody(requestBody.toString())
+                    // Retry up to 2 times on timeout
+                    var respText = ""
+                    var lastError = ""
+                    for (attempt in 1..2) {
+                        val client = io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
+                            engine { config { readTimeout(30, java.util.concurrent.TimeUnit.SECONDS) } }
                         }
-                        val respText = resp.bodyAsText()
+                        try {
+                            val resp = client.post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$geminiKey") {
+                                contentType(ContentType.Application.Json)
+                                setBody(requestBody.toString())
+                            }
+                            respText = resp.bodyAsText()
+                            client.close()
+                            break // Success
+                        } catch (e: Exception) {
+                            client.close()
+                            lastError = e.message?.take(80) ?: "timeout"
+                            ServiceState.addLog("look_and_find: attempt $attempt failed: $lastError")
+                            if (attempt < 2) delay(1000) // Brief delay before retry
+                        }
+                    }
+                    if (respText.isBlank()) {
+                        return """{"found":false,"error":"Vision API failed after 2 attempts: $lastError"}"""
+                    }
 
+                    try {
                         val respJson = try { com.google.gson.JsonParser.parseString(respText).asJsonObject } catch (_: Exception) {
                             return """{"found":false,"error":"Vision API returned invalid response"}"""
                         }
@@ -587,8 +708,7 @@ Rules:
                         ServiceState.addLog("look_and_find error: ${e.message?.take(80)}")
                         """{"found":false,"error":"Vision API failed: ${e.message?.take(100)?.replace("\"", "'")}"}"""
                     } finally {
-                        client.close()
-                        try { file.delete() } catch (_: Exception) {}  // Cleanup screenshot (sensitive data)
+                        try { file.delete() } catch (_: Exception) {}  // Cleanup screenshot
                     }
                 }
 

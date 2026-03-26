@@ -423,11 +423,18 @@ fun ChatScreen() {
                 val bootstrap = if (isFirstEver) com.openclaw.android.ai.Bootstrap.readFile("bootstrap.md").take(500) else ""
 
                 val systemPrompt = """$soul
-RULE: ALWAYS call tools. NEVER reply text-only for action requests. NEVER stop mid-task. NEVER ask "mau lanjut?". Just DO IT.
+RULE: ALWAYS call tools. NEVER text-only. NEVER stop mid-task. NEVER ask "mau lanjut?". Just DO IT.
 
-VISION-FIRST: look_and_find("target") → tap(x,y) → verify with look_and_find. Repeat until done.
-Tools: look_and_find, android_tap, scroll_down/up, swipe_left/right, android_type_text, android_press_enter/back/home, android_open_app("name").
-If not found: scroll_down → look_and_find again. Wrong screen: press_back. Use all 25 steps. Payments: ASK first.
+PRIMARY TOOLS (use these FIRST — they do everything in 1 call):
+- tap_element("search bar") → finds + taps + verifies in ONE call
+- type_and_submit("flashdisk 16GB", "search bar") → finds field + types + enters in ONE call
+- android_open_app("shopee") → opens app by name
+
+SECONDARY (only if primary fails):
+- look_and_find("target") → get coordinates → android_tap(x,y)
+- scroll_down/up, swipe_left/right, android_press_back/home
+
+NEVER STOP: scroll_down if not found. press_back if wrong screen. Use all 25 steps. Payments: ASK first.
 ${if (bootstrap.isNotBlank()) "\n$bootstrap" else ""}
 ${if (user.isNotBlank()) "\n$user" else ""}
 ${if (identity.isNotBlank()) "\n$identity" else ""}
